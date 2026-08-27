@@ -151,6 +151,7 @@ public class NfeXmlGenerator {
 
         xml.writeStartElement("prod");
         tag(xml, "cProd", item.codigoProduto());
+        tag(xml, "cEAN", "SEM GTIN");
         tag(xml, "xProd", item.descricao());
         tag(xml, "NCM", item.ncm());
         tag(xml, "CFOP", item.cfop());
@@ -158,20 +159,33 @@ public class NfeXmlGenerator {
         tag(xml, "qCom", item.quantidade().toPlainString());
         tag(xml, "vUnCom", item.valorUnitario().toPlainString());
         tag(xml, "vProd", item.valorTotal().toPlainString());
+        tag(xml, "cEANTrib", "SEM GTIN");
+        tag(xml, "uTrib", item.unidadeComercial());
+        tag(xml, "qTrib", item.quantidade().toPlainString());
+        tag(xml, "vUnTrib", item.valorUnitario().toPlainString());
+        tag(xml, "indTot", "1");
         xml.writeEndElement(); // prod
 
         xml.writeStartElement("imposto");
         escreverIcms(xml, item.imposto());
         if (item.imposto().valorIpi().compareTo(BigDecimal.ZERO) > 0) {
-            xml.writeStartElement("IPI");
-            tag(xml, "vIPI", item.imposto().valorIpi().toPlainString());
-            xml.writeEndElement();
+            escreverIpi(xml, item);
         }
         xml.writeStartElement("PIS");
+        xml.writeStartElement("PISAliq");
+        tag(xml, "CST", "01");
+        tag(xml, "vBC", item.valorTotal().toPlainString());
+        tag(xml, "pPIS", percentualSobre(item.imposto().valorPis(), item.valorTotal()));
         tag(xml, "vPIS", item.imposto().valorPis().toPlainString());
         xml.writeEndElement();
+        xml.writeEndElement();
         xml.writeStartElement("COFINS");
+        xml.writeStartElement("COFINSAliq");
+        tag(xml, "CST", "01");
+        tag(xml, "vBC", item.valorTotal().toPlainString());
+        tag(xml, "pCOFINS", percentualSobre(item.imposto().valorCofins(), item.valorTotal()));
         tag(xml, "vCOFINS", item.imposto().valorCofins().toPlainString());
+        xml.writeEndElement();
         xml.writeEndElement();
         xml.writeEndElement(); // imposto
 
@@ -183,6 +197,7 @@ public class NfeXmlGenerator {
         xml.writeStartElement("ICMS" + imposto.cstIcms());
         tag(xml, "orig", imposto.origemIcms());
         tag(xml, "CST", imposto.cstIcms());
+        tag(xml, "modBC", "3"); // 3 = valor da operacao
         tag(xml, "vBC", imposto.baseCalculoIcms().toPlainString());
         tag(xml, "pICMS", imposto.aliquotaIcms().toPlainString());
         tag(xml, "vICMS", imposto.valorIcms().toPlainString());
@@ -190,14 +205,50 @@ public class NfeXmlGenerator {
         xml.writeEndElement();
     }
 
+    private void escreverIpi(XMLStreamWriter xml, ItemNota item) throws XMLStreamException {
+        xml.writeStartElement("IPI");
+        tag(xml, "cEnq", "999"); // 999 = nao enquadrado em incentivo especifico
+        xml.writeStartElement("IPITrib");
+        tag(xml, "CST", "50"); // 50 = saida tributada
+        tag(xml, "vBC", item.valorTotal().toPlainString());
+        tag(xml, "pIPI", percentualSobre(item.imposto().valorIpi(), item.valorTotal()));
+        tag(xml, "vIPI", item.imposto().valorIpi().toPlainString());
+        xml.writeEndElement();
+        xml.writeEndElement();
+    }
+
+    private String percentualSobre(BigDecimal valor, BigDecimal base) {
+        if (base.compareTo(BigDecimal.ZERO) == 0) {
+            return "0.0000";
+        }
+        return valor.multiply(BigDecimal.valueOf(100))
+                .divide(base, 4, java.math.RoundingMode.HALF_UP)
+                .toPlainString();
+    }
+
     private void escreverTotal(XMLStreamWriter xml, NotaFiscalEletronica nfe) throws XMLStreamException {
+        String zero = "0.00";
         xml.writeStartElement("total");
         xml.writeStartElement("ICMSTot");
         tag(xml, "vBC", nfe.itens().stream().map(i -> i.imposto().baseCalculoIcms())
                 .reduce(BigDecimal.ZERO, BigDecimal::add).toPlainString());
         tag(xml, "vICMS", nfe.valorTotalIcms().toPlainString());
+        tag(xml, "vICMSDeson", zero);
+        tag(xml, "vFCP", zero);
+        tag(xml, "vBCST", zero);
+        tag(xml, "vST", zero);
+        tag(xml, "vFCPST", zero);
+        tag(xml, "vFCPSTRet", zero);
         tag(xml, "vProd", nfe.valorTotalProdutos().toPlainString());
+        tag(xml, "vFrete", zero);
+        tag(xml, "vSeg", zero);
+        tag(xml, "vDesc", zero);
+        tag(xml, "vII", zero);
         tag(xml, "vIPI", nfe.valorTotalIpi().toPlainString());
+        tag(xml, "vIPIDevol", zero);
+        tag(xml, "vPIS", nfe.valorTotalPis().toPlainString());
+        tag(xml, "vCOFINS", nfe.valorTotalCofins().toPlainString());
+        tag(xml, "vOutro", zero);
         tag(xml, "vNF", nfe.valorTotalNota().toPlainString());
         tag(xml, "vTotTrib", nfe.valorTotalTributos().toPlainString());
         xml.writeEndElement();

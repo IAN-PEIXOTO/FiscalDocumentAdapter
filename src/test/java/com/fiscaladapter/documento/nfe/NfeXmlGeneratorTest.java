@@ -53,7 +53,7 @@ class NfeXmlGeneratorTest {
         return factory.newDocumentBuilder().parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
     }
 
-    private NotaFiscalEletronica notaDeExemplo() {
+    NotaFiscalEletronica notaDeExemplo() {
         Endereco enderecoEmitente = new Endereco("Rua Teste", "100", "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1130000000");
         Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", "1", enderecoEmitente);
 

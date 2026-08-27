@@ -26,6 +26,14 @@ public record NotaFiscalEletronica(
         return itens.stream().map(i -> i.imposto().valorIpi()).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    public BigDecimal valorTotalPis() {
+        return itens.stream().map(i -> i.imposto().valorPis()).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public BigDecimal valorTotalCofins() {
+        return itens.stream().map(i -> i.imposto().valorCofins()).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public BigDecimal valorTotalNota() {
         return valorTotalProdutos().add(valorTotalIpi());
     }
