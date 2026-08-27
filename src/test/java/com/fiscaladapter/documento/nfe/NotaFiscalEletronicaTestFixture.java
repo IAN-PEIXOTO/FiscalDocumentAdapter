@@ -1,5 +1,7 @@
 package com.fiscaladapter.documento.nfe;
 
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -25,11 +27,28 @@ public final class NotaFiscalEletronicaTestFixture {
                 BigDecimal.ONE.setScale(4), BigDecimal.valueOf(100.00).setScale(2), BigDecimal.valueOf(100.00).setScale(2), imposto);
 
         IdentificacaoNfe ide = new IdentificacaoNfe("SP", "VENDA DE MERCADORIA", 1, 42,
-                LocalDate.of(2026, 3, 15), TipoAmbiente.HOMOLOGACAO, 1, true, "3550308");
+                LocalDate.of(2026, 3, 15), TipoAmbiente.HOMOLOGACAO, 1, true, "3550308", TipoDocumentoFiscal.NFE);
 
         DetalhePagamento pagamento = new DetalhePagamento("01", BigDecimal.valueOf(100.00).setScale(2));
 
         return new NotaFiscalEletronica(ide, emitente, destinatario, List.of(item), List.of(pagamento));
+    }
+
+    /** NFC-e (modelo 65) para consumidor nao identificado - sem destinatario (FIS-17). */
+    public static NotaFiscalEletronica notaNfceSemDestinatario() {
+        Endereco enderecoEmitente = new Endereco("Rua Teste", "100", "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1130000000");
+        Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", "1", enderecoEmitente);
+
+        ItemNota item = new ItemNota(1, "PROD001", "PRODUTO TESTE", "61099010", "5102", "UN",
+                BigDecimal.ONE.setScale(4), BigDecimal.valueOf(100.00).setScale(2), BigDecimal.valueOf(100.00).setScale(2),
+                impostoIcms00());
+
+        IdentificacaoNfe ide = new IdentificacaoNfe("SP", "VENDA DE MERCADORIA", 1, 42,
+                LocalDate.of(2026, 3, 15), TipoAmbiente.HOMOLOGACAO, 1, true, "3550308", TipoDocumentoFiscal.NFCE);
+
+        DetalhePagamento pagamento = new DetalhePagamento("01", BigDecimal.valueOf(100.00).setScale(2));
+
+        return new NotaFiscalEletronica(ide, emitente, null, List.of(item), List.of(pagamento));
     }
 
     public static ImpostoItem impostoIcms00() {

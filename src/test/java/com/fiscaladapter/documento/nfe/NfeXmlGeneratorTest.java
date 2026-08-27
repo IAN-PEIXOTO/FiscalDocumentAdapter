@@ -68,6 +68,25 @@ class NfeXmlGeneratorTest {
         assertApenasAssinaturaAusente(xml);
     }
 
+    @Test
+    void deveGerarNfceSemDestinatarioComModeloETpPresCorretosEValidaContraXsd() throws Exception {
+        NotaFiscalEletronica nfce = NotaFiscalEletronicaTestFixture.notaNfceSemDestinatario();
+
+        String xml = generator.gerar(nfce);
+        Document documento = parse(xml);
+
+        assertThat(textoDe(documento, "mod")).isEqualTo("65");
+        assertThat(textoDe(documento, "tpImp")).isEqualTo("4");
+        assertThat(textoDe(documento, "indPres")).isEqualTo("1");
+        assertThat(textoDe(documento, "idDest")).isEqualTo("1"); // sem dest -> assume operacao interna
+        assertThat(documento.getElementsByTagName("dest").getLength()).isEqualTo(0);
+
+        String chaveAcesso = ((Element) documento.getElementsByTagName("infNFe").item(0))
+                .getAttribute("Id").substring(3); // remove o prefixo "NFe"
+        assertThat(chaveAcesso.substring(20, 22)).isEqualTo("65"); // mod, layout cUF(2)+AAMM(4)+CNPJ(14)+mod(2)+...
+        assertApenasAssinaturaAusente(xml);
+    }
+
     /** XML sem assinatura (FIS-4 acontece depois) so pode falhar a validacao XSD por causa do Signature ausente. */
     private void assertApenasAssinaturaAusente(String xml) {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> new NfeXsdValidator().validar(xml))

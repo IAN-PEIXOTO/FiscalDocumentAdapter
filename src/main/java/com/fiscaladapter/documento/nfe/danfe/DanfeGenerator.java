@@ -58,7 +58,9 @@ public class DanfeGenerator {
             escreverCabecalho(documento, dados);
             escreverIdentificacaoEChave(documento, writer, nfe, chaveAcesso, dados);
             escreverEmitente(documento, nfe.emitente());
-            escreverDestinatario(documento, nfe.destinatario());
+            if (nfe.destinatario() != null) {
+                escreverDestinatario(documento, nfe.destinatario());
+            }
             escreverItens(documento, nfe);
             escreverTotais(documento, nfe);
 

@@ -18,7 +18,9 @@ public class RegraCfopCompativelComOperacao implements RegraNegocio {
 
     @Override
     public List<ViolacaoRegra> validar(NotaFiscalEletronica nfe) {
-        boolean operacaoInterna = nfe.emitente().endereco().uf().equals(nfe.destinatario().endereco().uf());
+        // sem destinatario (NFC-e para consumidor nao identificado): operacao sempre interna
+        boolean operacaoInterna = nfe.destinatario() == null
+                || nfe.emitente().endereco().uf().equals(nfe.destinatario().endereco().uf());
         char prefixoEsperado = operacaoInterna ? '5' : '6';
 
         List<ViolacaoRegra> violacoes = new ArrayList<>();

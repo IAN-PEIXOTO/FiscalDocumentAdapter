@@ -1,6 +1,7 @@
 package com.fiscaladapter.api.nfe;
 
 import com.fiscaladapter.documento.CodigoUfSefaz;
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.DetalhePagamento;
 import com.fiscaladapter.documento.nfe.Destinatario;
 import com.fiscaladapter.documento.nfe.Emitente;
@@ -21,9 +22,14 @@ import java.util.Locale;
 public class NfeRequestMapper {
 
     public NotaFiscalEletronica paraDominio(NfePedidoEmissaoRequest pedido) {
+        return paraDominio(pedido, TipoDocumentoFiscal.NFE);
+    }
+
+    /** tipoDocumento explicito para reaproveitar o mesmo mapeamento na NFC-e (modelo 65, FIS-17). */
+    public NotaFiscalEletronica paraDominio(NfePedidoEmissaoRequest pedido, TipoDocumentoFiscal tipoDocumento) {
         InfNfeRequest infNFe = pedido.infNFe();
         return new NotaFiscalEletronica(
-                identificacao(pedido, infNFe.ide()),
+                identificacao(pedido, infNFe.ide(), tipoDocumento),
                 emitente(infNFe.emit()),
                 destinatario(infNFe.dest()),
                 itens(infNFe.det()),
@@ -31,7 +37,7 @@ public class NfeRequestMapper {
         );
     }
 
-    private IdentificacaoNfe identificacao(NfePedidoEmissaoRequest pedido, IdeRequest ide) {
+    private IdentificacaoNfe identificacao(NfePedidoEmissaoRequest pedido, IdeRequest ide, TipoDocumentoFiscal tipoDocumento) {
         return new IdentificacaoNfe(
                 CodigoUfSefaz.uf(ide.cUF()),
                 ide.natOp(),
@@ -41,7 +47,8 @@ public class NfeRequestMapper {
                 TipoAmbiente.valueOf(pedido.ambiente().toUpperCase(Locale.ROOT)),
                 ide.finNFe(),
                 ide.indFinal() == 1,
-                ide.cMunFG()
+                ide.cMunFG(),
+                tipoDocumento
         );
     }
 
@@ -49,7 +56,11 @@ public class NfeRequestMapper {
         return new Emitente(emit.CNPJ(), emit.xNome(), emit.xFant(), emit.IE(), emit.CRT(), endereco(emit.enderEmit()));
     }
 
+    /** Nulo para NFC-e com consumidor nao identificado (venda anonima - FIS-17). */
     private Destinatario destinatario(DestRequest dest) {
+        if (dest == null) {
+            return null;
+        }
         String documento = dest.CNPJ() != null ? dest.CNPJ() : dest.CPF();
         return new Destinatario(documento, dest.xNome(), String.valueOf(dest.indIEDest()),
                 dest.IE(), dest.email(), endereco(dest.enderDest()));

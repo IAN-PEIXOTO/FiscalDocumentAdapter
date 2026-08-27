@@ -1,5 +1,7 @@
 package com.fiscaladapter.documento.nfe;
 
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
+
 import java.time.LocalDate;
 
 public record IdentificacaoNfe(
@@ -11,6 +13,7 @@ public record IdentificacaoNfe(
         TipoAmbiente ambiente,
         int finalidadeEmissao,
         boolean consumidorFinal,
-        String codigoMunicipioFatoGerador
+        String codigoMunicipioFatoGerador,
+        TipoDocumentoFiscal tipoDocumento
 ) {
 }

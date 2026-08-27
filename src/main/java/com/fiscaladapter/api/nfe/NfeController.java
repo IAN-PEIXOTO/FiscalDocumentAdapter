@@ -68,6 +68,12 @@ public class NfeController {
     private NfeResponse processar(NfePedidoEmissaoRequest documento, String clientId) {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
 
+        // dest e opcional no DTO so para a NFC-e reaproveitar o mesmo mapeamento (FIS-17) -
+        // este endpoint e exclusivamente NFe (modelo 55), que sempre exige destinatario.
+        if (nfe.destinatario() == null) {
+            throw new IllegalArgumentException("infNFe.dest e obrigatorio para NFe (modelo 55)");
+        }
+
         regraNegocioService.validar(nfe);
 
         CertificadoCarregado certificadoCarregado =

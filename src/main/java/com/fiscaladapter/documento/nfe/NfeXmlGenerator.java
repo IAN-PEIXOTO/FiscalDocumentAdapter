@@ -35,7 +35,7 @@ public class NfeXmlGenerator {
                 nfe.identificacao().uf(),
                 nfe.identificacao().dataEmissao(),
                 nfe.emitente().cnpjSemMascara(),
-                chaveAcessoService.modeloPara(TipoDocumentoFiscal.NFE),
+                chaveAcessoService.modeloPara(nfe.identificacao().tipoDocumento()),
                 nfe.identificacao().serie(),
                 nfe.identificacao().numero(),
                 1
@@ -58,7 +58,9 @@ public class NfeXmlGenerator {
 
             escreverIde(xml, nfe, chaveAcesso);
             escreverEmitente(xml, nfe.emitente());
-            escreverDestinatario(xml, nfe.destinatario());
+            if (nfe.destinatario() != null) {
+                escreverDestinatario(xml, nfe.destinatario());
+            }
             for (ItemNota item : nfe.itens()) {
                 escreverItem(xml, item);
             }
@@ -79,24 +81,27 @@ public class NfeXmlGenerator {
 
     private void escreverIde(XMLStreamWriter xml, NotaFiscalEletronica nfe, String chaveAcesso) throws XMLStreamException {
         IdentificacaoNfe ide = nfe.identificacao();
+        boolean ehNfce = ide.tipoDocumento() == TipoDocumentoFiscal.NFCE;
         xml.writeStartElement("ide");
         tag(xml, "cUF", chaveAcesso.substring(0, 2));
         tag(xml, "cNF", chaveAcesso.substring(35, 43));
         tag(xml, "natOp", ide.naturezaOperacao());
-        tag(xml, "mod", chaveAcessoService.modeloPara(TipoDocumentoFiscal.NFE));
+        tag(xml, "mod", chaveAcessoService.modeloPara(ide.tipoDocumento()));
         tag(xml, "serie", String.valueOf(ide.serie()));
         tag(xml, "nNF", String.valueOf(ide.numero()));
         tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EMISSAO_FORMAT));
         tag(xml, "tpNF", "1"); // 1 = saida
-        tag(xml, "idDest", nfe.destinatario().endereco().uf().equals(ide.uf()) ? "1" : "2");
+        // sem destinatario (NFC-e para consumidor nao identificado): operacao sempre interna (mesma UF)
+        boolean operacaoInterna = nfe.destinatario() == null || nfe.destinatario().endereco().uf().equals(ide.uf());
+        tag(xml, "idDest", operacaoInterna ? "1" : "2");
         tag(xml, "cMunFG", ide.codigoMunicipioFatoGerador());
-        tag(xml, "tpImp", "1"); // DANFE retrato
+        tag(xml, "tpImp", ehNfce ? "4" : "1"); // NFC-e: 4 = DANFE NFC-e; NFe: 1 = retrato
         tag(xml, "tpEmis", chaveAcesso.substring(34, 35)); // extraido da chave, nao pode divergir dela (ver FIS-37)
         tag(xml, "cDV", chaveAcesso.substring(43));
         tag(xml, "tpAmb", String.valueOf(ide.ambiente().codigo()));
         tag(xml, "finNFe", String.valueOf(ide.finalidadeEmissao()));
         tag(xml, "indFinal", ide.consumidorFinal() ? "1" : "0");
-        tag(xml, "indPres", "9"); // 9 = nao se aplica (ex.: emissao via API/integracao)
+        tag(xml, "indPres", ehNfce ? "1" : "9"); // NFC-e: 1 = operacao presencial; NFe: 9 = nao se aplica (emissao via API)
         tag(xml, "procEmi", "0"); // emissao por aplicativo do contribuinte
         tag(xml, "verProc", "1.0.0");
         xml.writeEndElement();
