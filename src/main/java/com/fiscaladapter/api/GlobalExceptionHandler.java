@@ -3,6 +3,7 @@ package com.fiscaladapter.api;
 import com.fiscaladapter.assinatura.AssinaturaDigitalException;
 import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
+import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,6 +22,15 @@ public class GlobalExceptionHandler {
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErroResposta("Dados invalidos no documento enviado", detalhes));
+    }
+
+    @ExceptionHandler(RegraNegocioVioladaException.class)
+    public ResponseEntity<ErroResposta> tratar(RegraNegocioVioladaException e) {
+        List<String> detalhes = e.getViolacoes().stream()
+                .map(v -> v.codigo() + ": " + v.mensagem())
+                .toList();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ErroResposta("Documento viola regras de negocio e seria rejeitado pela SEFAZ", detalhes));
     }
 
     @ExceptionHandler(XmlInvalidoException.class)

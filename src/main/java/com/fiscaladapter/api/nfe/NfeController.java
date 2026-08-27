@@ -8,6 +8,7 @@ import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
+import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,16 +35,19 @@ public class NfeController {
     private final AssinaturaXmlService assinaturaXmlService;
     private final NfeXsdValidator xsdValidator;
     private final CertificadoDigitalService certificadoDigitalService;
+    private final RegraNegocioService regraNegocioService;
 
     public NfeController(NfeRequestMapper mapper, ChaveAcessoService chaveAcessoService,
                           NfeXmlGenerator xmlGenerator, AssinaturaXmlService assinaturaXmlService,
-                          NfeXsdValidator xsdValidator, CertificadoDigitalService certificadoDigitalService) {
+                          NfeXsdValidator xsdValidator, CertificadoDigitalService certificadoDigitalService,
+                          RegraNegocioService regraNegocioService) {
         this.mapper = mapper;
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
         this.assinaturaXmlService = assinaturaXmlService;
         this.xsdValidator = xsdValidator;
         this.certificadoDigitalService = certificadoDigitalService;
+        this.regraNegocioService = regraNegocioService;
     }
 
     @PostMapping(value = "/api/v1/nfe", consumes = "multipart/form-data")
@@ -51,6 +55,8 @@ public class NfeController {
                                                @RequestPart("certificado") MultipartFile certificado,
                                                @RequestParam("senhaCertificado") String senhaCertificado) throws IOException {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
+
+        regraNegocioService.validar(nfe);
 
         String chaveAcesso = chaveAcessoService.gerar(
                 nfe.identificacao().uf(),
