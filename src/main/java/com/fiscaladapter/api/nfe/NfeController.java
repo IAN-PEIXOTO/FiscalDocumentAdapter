@@ -67,6 +67,6 @@ public class NfeController {
         return new NfeResponse(resultado.chaveAcesso(), resultado.xmlAssinado(),
                 resultado.autorizacao().autorizada(), resultado.autorizacao().codigoStatus(),
                 resultado.autorizacao().motivo(), resultado.autorizacao().numeroProtocolo(),
-                resultado.viaContingencia());
+                resultado.viaContingencia(), resultado.viaEpec());
     }
 }

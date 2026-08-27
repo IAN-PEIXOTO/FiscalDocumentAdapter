@@ -40,6 +40,14 @@ class SefazEndpointRegistryTest {
     }
 
     @Test
+    void deveResolverRecepcaoEventoDaSvcRsParaEpec() {
+        assertThat(registry.obterUrl("SVC-RS", TipoAmbiente.PRODUCAO, TipoServicoSefaz.RECEPCAO_EVENTO))
+                .startsWith("https://");
+        assertThat(registry.obterUrl("SVC-RS", TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.RECEPCAO_EVENTO))
+                .startsWith("https://");
+    }
+
+    @Test
     void deveFalharParaUfInexistente() {
         assertThatThrownBy(() -> registry.obterUrl("XX", TipoAmbiente.PRODUCAO, TipoServicoSefaz.STATUS_SERVICO))
                 .isInstanceOf(IllegalArgumentException.class);

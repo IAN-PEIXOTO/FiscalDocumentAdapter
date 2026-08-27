@@ -21,13 +21,14 @@ import org.springframework.stereotype.Component;
  * assinado); se todas as tentativas falharem por problema de comunicacao,
  * assume contingencia - gera uma NOVA chave/XML com tpEmis da SVC designada
  * para aquela UF, assina de novo (tpEmis faz parte do conteudo assinado) e
- * envia para o servidor de contingencia.
+ * envia para o servidor de contingencia. Se ate a SVC falhar, tenta o ultimo
+ * recurso: EPEC (evento que libera a NFe provisoriamente, sem autorizacao
+ * definitiva - ver NfeEpecClient e ResultadoEmissaoNfe.viaEpec).
  *
- * Fora do escopo desta versao: EPEC (contingencia baseada em evento, usada
- * quando nem a SVC responde) e fila/retomada assincrona de transmissao
- * (haveria que persistir o estado "pendente de transmissao" em banco e ter
- * um worker retomando depois) - registrar como debito tecnico se a
- * indisponibilidade da SVC tambem precisar ser coberta.
+ * Fora do escopo desta versao: fila/retomada assincrona de transmissao da
+ * NFe emitida via EPEC assim que a SEFAZ voltar (haveria que persistir o
+ * estado "pendente de transmissao" em banco e ter um worker retomando
+ * depois) - registrar como debito tecnico (ver FIS-30).
  */
 @Component
 public class EmissaoNfeOrquestrador {
@@ -36,22 +37,26 @@ public class EmissaoNfeOrquestrador {
 
     private static final int TENTATIVAS_ENDPOINT_NORMAL = 2;
     private static final long ESPERA_ENTRE_TENTATIVAS_MS = 2000;
+    private static final String TP_EMIS_EPEC = "4";
 
     private final ChaveAcessoService chaveAcessoService;
     private final NfeXmlGenerator xmlGenerator;
     private final AssinaturaXmlService assinaturaXmlService;
     private final NfeXsdValidator xsdValidator;
     private final NfeAutorizacaoClient autorizacaoClient;
+    private final NfeEpecClient epecClient;
     private final NfeEmissaoMetrics metrics;
 
     public EmissaoNfeOrquestrador(ChaveAcessoService chaveAcessoService, NfeXmlGenerator xmlGenerator,
                                    AssinaturaXmlService assinaturaXmlService, NfeXsdValidator xsdValidator,
-                                   NfeAutorizacaoClient autorizacaoClient, NfeEmissaoMetrics metrics) {
+                                   NfeAutorizacaoClient autorizacaoClient, NfeEpecClient epecClient,
+                                   NfeEmissaoMetrics metrics) {
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
         this.assinaturaXmlService = assinaturaXmlService;
         this.xsdValidator = xsdValidator;
         this.autorizacaoClient = autorizacaoClient;
+        this.epecClient = epecClient;
         this.metrics = metrics;
     }
 
@@ -96,13 +101,41 @@ public class EmissaoNfeOrquestrador {
                     contingencia.xmlAssinado(), uf, svc.chaveEndpoint(), nfe.identificacao().ambiente(), certificado);
             return finalizarComSucesso(contingencia, autorizacao, true, cronometro);
         } catch (SefazComunicacaoException falhaContingencia) {
+            log.warn("Contingencia {} tambem falhou - acionando EPEC como ultimo recurso. Erro: {}",
+                    svc.chaveEndpoint(), falhaContingencia.getMessage());
+            return tentarEpec(nfe, certificado, uf, falhaOriginal, falhaContingencia, cronometro);
+        }
+    }
+
+    private ResultadoEmissaoNfe tentarEpec(NotaFiscalEletronica nfe, CertificadoCarregado certificado, String uf,
+                                             SefazComunicacaoException falhaOriginal,
+                                             SefazComunicacaoException falhaContingencia, Timer.Sample cronometro) {
+        DocumentoPreparado epec = prepararDocumento(nfe, certificado, TP_EMIS_EPEC);
+
+        try (MdcChaveAcesso ignorado = MdcChaveAcesso.abrir(epec.chaveAcesso())) {
+            EpecResponse resposta = epecClient.registrar(nfe, epec.chaveAcesso(), nfe.identificacao().ambiente(), certificado);
+
+            if (!resposta.registrada()) {
+                throw new SefazComunicacaoException(
+                        "EPEC nao registrado - cStat " + resposta.codigoStatus() + " (" + resposta.motivo() + ")");
+            }
+
+            metrics.registrarViaEpec(cronometro, resposta.codigoStatus());
+            log.warn("Endpoint normal da UF {} e a contingencia falharam - NFe liberada provisoriamente via EPEC "
+                    + "(protocolo definitivo pendente ate a retomada da transmissao normal, ver FIS-30)", uf);
+
+            AutorizacaoResponse autorizacaoProvisoria = new AutorizacaoResponse(
+                    resposta.codigoStatus(), resposta.motivo(), null, false);
+            return new ResultadoEmissaoNfe(epec.chaveAcesso(), epec.xmlAssinado(), autorizacaoProvisoria, true, true);
+        } catch (SefazComunicacaoException falhaEpec) {
             metrics.registrarErroComunicacao(cronometro);
-            log.error("Endpoint normal da UF {} e a contingencia {} falharam. Ultimo erro: {}",
-                    uf, svc.chaveEndpoint(), falhaContingencia.getMessage());
+            log.error("Endpoint normal da UF {}, contingencia e EPEC falharam. Ultimo erro: {}",
+                    uf, falhaEpec.getMessage());
 
             SefazComunicacaoException falhaFinal = new SefazComunicacaoException(
-                    "Endpoint normal da UF " + uf + " e a contingencia " + svc.chaveEndpoint()
-                            + " falharam. Ultimo erro: " + falhaContingencia.getMessage(), falhaContingencia);
+                    "Endpoint normal da UF " + uf + ", contingencia e EPEC falharam. Ultimo erro: " + falhaEpec.getMessage(),
+                    falhaEpec);
+            falhaFinal.addSuppressed(falhaContingencia);
             if (falhaOriginal != null) {
                 falhaFinal.addSuppressed(falhaOriginal);
             }
@@ -121,7 +154,7 @@ public class EmissaoNfeOrquestrador {
             log.warn("NFe rejeitada pela SEFAZ - cStat {} ({}), contingencia={}",
                     autorizacao.codigoStatus(), autorizacao.motivo(), viaContingencia);
         }
-        return new ResultadoEmissaoNfe(documento.chaveAcesso(), documento.xmlAssinado(), autorizacao, viaContingencia);
+        return new ResultadoEmissaoNfe(documento.chaveAcesso(), documento.xmlAssinado(), autorizacao, viaContingencia, false);
     }
 
     private DocumentoPreparado prepararDocumento(NotaFiscalEletronica nfe, CertificadoCarregado certificado, String tpEmis) {

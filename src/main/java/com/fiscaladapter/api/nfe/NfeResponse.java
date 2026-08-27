@@ -7,6 +7,7 @@ public record NfeResponse(
         String codigoStatusSefaz,
         String motivoSefaz,
         String numeroProtocolo,
-        boolean viaContingencia
+        boolean viaContingencia,
+        boolean viaEpec
 ) {
 }

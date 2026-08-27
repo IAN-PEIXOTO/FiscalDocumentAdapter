@@ -40,10 +40,11 @@ class EmissaoNfeOrquestradorTest {
     private final AssinaturaXmlService assinaturaXmlService = new AssinaturaXmlService();
     private final NfeXsdValidator xsdValidator = new NfeXsdValidator();
     private final NfeAutorizacaoClient autorizacaoClient = Mockito.mock(NfeAutorizacaoClient.class);
+    private final NfeEpecClient epecClient = Mockito.mock(NfeEpecClient.class);
     private final NfeEmissaoMetrics metrics = new NfeEmissaoMetrics(new SimpleMeterRegistry());
 
     private final EmissaoNfeOrquestrador orquestrador = new EmissaoNfeOrquestrador(
-            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient, metrics);
+            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient, epecClient, metrics);
 
     @Test
     void deveAutorizarNaPrimeiraTentativaSemAcionarContingencia() throws Exception {
@@ -81,7 +82,7 @@ class EmissaoNfeOrquestradorTest {
     }
 
     @Test
-    void devePropagarErroQuandoEndpointNormalEContingenciaFalham() throws Exception {
+    void deveAcionarEpecQuandoEndpointNormalEContingenciaFalham() throws Exception {
         NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
         CertificadoCarregado certificado = certificadoDeTeste();
 
@@ -89,10 +90,33 @@ class EmissaoNfeOrquestradorTest {
                 .thenThrow(new SefazComunicacaoException("timeout endpoint normal"));
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenThrow(new SefazComunicacaoException("timeout SVC-AN"));
+        when(epecClient.registrar(any(NotaFiscalEletronica.class), anyString(), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(EpecResponse.de("136", "Evento registrado e vinculado a NF-e"));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
+
+        assertThat(resultado.viaContingencia()).isTrue();
+        assertThat(resultado.viaEpec()).isTrue();
+        assertThat(resultado.autorizacao().autorizada()).isFalse();
+        assertThat(resultado.autorizacao().codigoStatus()).isEqualTo("136");
+        assertThat(resultado.chaveAcesso().substring(34, 35)).isEqualTo("4"); // tpEmis=4 (EPEC)
+    }
+
+    @Test
+    void devePropagarErroQuandoEndpointNormalContingenciaEEpecFalham() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenThrow(new SefazComunicacaoException("timeout endpoint normal"));
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenThrow(new SefazComunicacaoException("timeout SVC-AN"));
+        when(epecClient.registrar(any(NotaFiscalEletronica.class), anyString(), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenThrow(new SefazComunicacaoException("timeout EPEC"));
 
         assertThatThrownBy(() -> orquestrador.emitir(nfe, certificado))
                 .isInstanceOf(SefazComunicacaoException.class)
-                .hasMessageContaining("SVC-AN");
+                .hasMessageContaining("EPEC");
     }
 
     private CertificadoCarregado certificadoDeTeste() throws Exception {

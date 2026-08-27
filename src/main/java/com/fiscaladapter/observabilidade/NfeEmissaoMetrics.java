@@ -39,6 +39,11 @@ public class NfeEmissaoMetrics {
         finalizar(cronometro, "erro_comunicacao", false, null);
     }
 
+    /** EPEC registrado (ultimo recurso): NFe ainda nao autorizada de fato, so liberada provisoriamente. */
+    public void registrarViaEpec(Timer.Sample cronometro, String codigoStatusSefaz) {
+        finalizar(cronometro, "epec_provisoria", true, codigoStatusSefaz);
+    }
+
     private void finalizar(Timer.Sample cronometro, String resultado, boolean viaContingencia, String codigoStatusSefaz) {
         Counter.builder(COUNTER_EMISSAO)
                 .tag("resultado", resultado)
