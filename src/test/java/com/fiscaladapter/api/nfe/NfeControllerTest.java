@@ -2,6 +2,8 @@ package com.fiscaladapter.api.nfe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.seguranca.ClienteApiService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -16,14 +18,18 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * O payload usado aqui segue o mesmo formato da API ACBr
  * (https://dev.acbr.api.br/docs/api - schema NfePedidoEmissao), para que
- * sistemas ja integrados com ela troquem apenas a URL de destino.
+ * sistemas ja integrados com ela troquem apenas a URL de destino. A
+ * autenticacao segue o mesmo padrao tambem: OAuth2 client_credentials
+ * (FIS-15).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -35,8 +41,23 @@ class NfeControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private ClienteApiService clienteApiService;
+
+    private String clientId;
+    private String clientSecret;
+
+    @BeforeEach
+    void criarClienteDeTeste() {
+        ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste");
+        this.clientId = credenciais.clientId();
+        this.clientSecret = credenciais.clientSecret();
+    }
+
     @Test
     void deveEmitirNfeComSucessoRetornandoChaveEXmlAssinado() throws Exception {
+        String accessToken = obterAccessToken();
+
         byte[] p12 = TestCertificadoFactory.gerarP12(
                 "12345678000199", "senha123".toCharArray(),
                 Date.from(Instant.now().minus(Duration.ofDays(1))),
@@ -51,14 +72,32 @@ class NfeControllerTest {
         mockMvc.perform(multipart("/api/v1/nfe")
                         .file(documento)
                         .file(certificado)
-                        .param("senhaCertificado", "senha123"))
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
                 .andExpect(jsonPath("$.xmlAssinado").exists());
     }
 
     @Test
+    void deveRejeitarRequisicaoSemToken() throws Exception {
+        MockMultipartFile documento = new MockMultipartFile(
+                "documento", "documento.json", "application/json",
+                objectMapper.writeValueAsBytes(pedidoValido()));
+        MockMultipartFile certificado = new MockMultipartFile(
+                "certificado", "certificado.p12", "application/x-pkcs12", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(documento)
+                        .file(certificado)
+                        .param("senhaCertificado", "qualquer"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void deveRejeitarDocumentoComCamposObrigatoriosFaltando() throws Exception {
+        String accessToken = obterAccessToken();
+
         MockMultipartFile documentoInvalido = new MockMultipartFile(
                 "documento", "documento.json", "application/json", "{}".getBytes());
         MockMultipartFile certificado = new MockMultipartFile(
@@ -67,9 +106,21 @@ class NfeControllerTest {
         mockMvc.perform(multipart("/api/v1/nfe")
                         .file(documentoInvalido)
                         .file(certificado)
-                        .param("senhaCertificado", "qualquer"))
+                        .param("senhaCertificado", "qualquer")
+                        .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensagem").value("Dados invalidos no documento enviado"));
+    }
+
+    private String obterAccessToken() throws Exception {
+        String resposta = mockMvc.perform(post("/oauth2/token")
+                        .with(httpBasic(clientId, clientSecret))
+                        .param("grant_type", "client_credentials")
+                        .param("scope", "nfe"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        return objectMapper.readTree(resposta).get("access_token").asText();
     }
 
     private NfePedidoEmissaoRequest pedidoValido() {
