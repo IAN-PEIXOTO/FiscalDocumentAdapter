@@ -1,0 +1,76 @@
+package com.fiscaladapter.documento.cte;
+
+import com.fiscaladapter.documento.nfe.XmlInvalidoException;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+
+import javax.xml.XMLConstants;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Valida o XML do CT-e contra o XSD oficial (layout 4.00, pacote PL_CTe_400_RTC,
+ * obtido de nfephp-org/sped-cte em 2026-08-27). O grupo infModal usa
+ * xs:any/processContents="skip" no XSD oficial - o conteudo especifico do
+ * modal (ex.: rodo/RNTRC) nao e validado estruturalmente por este validador,
+ * apenas a corretude e feita por revisao manual contra CteModalRodoviario_v4.00.xsd.
+ */
+@Component
+public class CteXsdValidator {
+
+    private final Schema schema;
+
+    public CteXsdValidator() {
+        try {
+            ClassPathResource recurso = new ClassPathResource("xsd/cte/cte_v4.00.xsd");
+            StreamSource fonte = new StreamSource(recurso.getInputStream(), recurso.getURL().toString());
+            SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+            this.schema = factory.newSchema(fonte);
+        } catch (SAXException | IOException e) {
+            throw new IllegalStateException("Falha ao carregar o XSD oficial do CT-e", e);
+        }
+    }
+
+    public void validar(String xml) {
+        List<String> erros = new ArrayList<>();
+        try {
+            Validator validator = schema.newValidator();
+            validator.setErrorHandler(new ErrorHandler() {
+                @Override
+                public void warning(SAXParseException exception) {
+                    // avisos nao bloqueiam o envio
+                }
+
+                @Override
+                public void error(SAXParseException exception) {
+                    erros.add(mensagem(exception));
+                }
+
+                @Override
+                public void fatalError(SAXParseException exception) {
+                    erros.add(mensagem(exception));
+                }
+
+                private String mensagem(SAXParseException e) {
+                    return "Linha " + e.getLineNumber() + ": " + e.getMessage();
+                }
+            });
+            validator.validate(new StreamSource(new StringReader(xml)));
+        } catch (SAXException | IOException e) {
+            erros.add(e.getMessage());
+        }
+
+        if (!erros.isEmpty()) {
+            throw new XmlInvalidoException(erros);
+        }
+    }
+}
