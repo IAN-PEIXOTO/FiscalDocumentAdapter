@@ -45,7 +45,7 @@ class RegraNegocioServiceTest {
         NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
         ItemNota original = base.itens().get(0);
         ImpostoItem impostoErrado = new ImpostoItem(
-                original.imposto().origemIcms(), original.imposto().cstIcms(),
+                original.imposto().grupoIcms(), original.imposto().origemIcms(), original.imposto().codigoIcms(),
                 original.imposto().baseCalculoIcms(), original.imposto().aliquotaIcms(),
                 BigDecimal.valueOf(50.00), // vICMS errado (deveria ser 18.00)
                 original.imposto().valorIpi(), original.imposto().valorPis(), original.imposto().valorCofins());

@@ -70,12 +70,23 @@ public class NfeRequestMapper {
     }
 
     private ImpostoItem imposto(ImpostoRequest imposto) {
-        Icms00Request icms00 = imposto.ICMS().ICMS00();
         BigDecimal valorIpi = imposto.IPI() != null ? imposto.IPI().IPITrib().vIPI() : BigDecimal.ZERO;
-        return new ImpostoItem(
-                icms00.orig(), icms00.CST(), icms00.vBC(), icms00.pICMS(), icms00.vICMS(),
-                valorIpi, imposto.PIS().PISAliq().vPIS(), imposto.COFINS().COFINSAliq().vCOFINS()
-        );
+        return icms(imposto.ICMS(), valorIpi, imposto.PIS().PISAliq().vPIS(), imposto.COFINS().COFINSAliq().vCOFINS());
+    }
+
+    private ImpostoItem icms(IcmsRequest icms, BigDecimal valorIpi, BigDecimal valorPis, BigDecimal valorCofins) {
+        if (icms.ICMS00() != null) {
+            Icms00Request g = icms.ICMS00();
+            return new ImpostoItem("ICMS00", g.orig(), g.CST(), g.vBC(), g.pICMS(), g.vICMS(), valorIpi, valorPis, valorCofins);
+        }
+        if (icms.ICMS40() != null) {
+            Icms40Request g = icms.ICMS40();
+            return new ImpostoItem("ICMS40", g.orig(), g.CST(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    valorIpi, valorPis, valorCofins);
+        }
+        IcmsSN102Request g = icms.ICMSSN102();
+        return new ImpostoItem("ICMSSN102", g.orig(), g.CSOSN(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                valorIpi, valorPis, valorCofins);
     }
 
     private List<DetalhePagamento> pagamentos(PagRequest pag) {

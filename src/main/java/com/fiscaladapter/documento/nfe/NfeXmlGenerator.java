@@ -194,13 +194,17 @@ public class NfeXmlGenerator {
 
     private void escreverIcms(XMLStreamWriter xml, ImpostoItem imposto) throws XMLStreamException {
         xml.writeStartElement("ICMS");
-        xml.writeStartElement("ICMS" + imposto.cstIcms());
+        xml.writeStartElement(imposto.grupoIcms());
         tag(xml, "orig", imposto.origemIcms());
-        tag(xml, "CST", imposto.cstIcms());
-        tag(xml, "modBC", "3"); // 3 = valor da operacao
-        tag(xml, "vBC", moeda(imposto.baseCalculoIcms()));
-        tag(xml, "pICMS", percentual(imposto.aliquotaIcms()));
-        tag(xml, "vICMS", moeda(imposto.valorIcms()));
+        tag(xml, imposto.grupoIcms().startsWith("ICMSSN") ? "CSOSN" : "CST", imposto.codigoIcms());
+        if (imposto.grupoIcms().equals("ICMS00")) {
+            tag(xml, "modBC", "3"); // 3 = valor da operacao
+            tag(xml, "vBC", moeda(imposto.baseCalculoIcms()));
+            tag(xml, "pICMS", percentual(imposto.aliquotaIcms()));
+            tag(xml, "vICMS", moeda(imposto.valorIcms()));
+        }
+        // ICMS40 (isenta/nao tributada/suspensao) e ICMSSN102 (Simples Nacional sem
+        // permissao de credito) nao levam base/aliquota/valor - so orig + CST/CSOSN.
         xml.writeEndElement();
         xml.writeEndElement();
     }

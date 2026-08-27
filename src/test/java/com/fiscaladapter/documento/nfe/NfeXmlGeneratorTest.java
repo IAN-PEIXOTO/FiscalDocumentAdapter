@@ -40,6 +40,45 @@ class NfeXmlGeneratorTest {
         assertThat(((Element) itens.item(0)).getAttribute("nItem")).isEqualTo("1");
     }
 
+    @Test
+    void deveGerarGrupoIcms40ParaItemIsentoEValidoContraXsd() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaComImposto(
+                NotaFiscalEletronicaTestFixture.impostoIcms40Isenta());
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        Element grupoIcms40 = (Element) documento.getElementsByTagName("ICMS40").item(0);
+        assertThat(grupoIcms40).isNotNull();
+        assertThat(grupoIcms40.getElementsByTagName("CST").item(0).getTextContent()).isEqualTo("40");
+        assertThat(grupoIcms40.getElementsByTagName("vBC").getLength()).isEqualTo(0);
+        assertApenasAssinaturaAusente(xml);
+    }
+
+    @Test
+    void deveGerarGrupoIcmsSn102ParaEmitenteDoSimplesNacionalEValidoContraXsd() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaComImposto(
+                NotaFiscalEletronicaTestFixture.impostoIcmsSN102());
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        assertThat(documento.getElementsByTagName("ICMSSN102").getLength()).isEqualTo(1);
+        assertThat(textoDe(documento, "CSOSN")).isEqualTo("102");
+        assertApenasAssinaturaAusente(xml);
+    }
+
+    /** XML sem assinatura (FIS-4 acontece depois) so pode falhar a validacao XSD por causa do Signature ausente. */
+    private void assertApenasAssinaturaAusente(String xml) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new NfeXsdValidator().validar(xml))
+                .isInstanceOf(XmlInvalidoException.class)
+                .satisfies(e -> {
+                    XmlInvalidoException invalido = (XmlInvalidoException) e;
+                    assertThat(invalido.getErros()).hasSize(1);
+                    assertThat(invalido.getErros().get(0)).contains("Signature");
+                });
+    }
+
     private String textoDe(Document documento, String tag) {
         return documento.getElementsByTagName(tag).item(0).getTextContent();
     }
