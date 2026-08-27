@@ -73,10 +73,54 @@ class NfeControllerTest {
                         .file(documento)
                         .file(certificado)
                         .param("senhaCertificado", "senha123")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-teste-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
                 .andExpect(jsonPath("$.xmlAssinado").exists());
+    }
+
+    @Test
+    void reenviarComMesmaChaveDeIdempotenciaDeveRetornarMesmaRespostaSemReprocessar() throws Exception {
+        String accessToken = obterAccessToken();
+        byte[] p12 = TestCertificadoFactory.gerarP12(
+                "12345678000199", "senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))),
+                Date.from(Instant.now().plus(Duration.ofDays(365))));
+
+        String respostaPrimeiraChamada = mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
+                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-repetida"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // segunda tentativa com o MESMO numero de nota (nNF=42): se fosse reprocessada,
+        // a numeracao sequencial atribuiria um numero diferente e a chave de acesso mudaria
+        String respostaSegundaChamada = mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
+                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-repetida"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(respostaSegundaChamada).isEqualTo(respostaPrimeiraChamada);
+    }
+
+    @Test
+    void deveRejeitarRequisicaoSemChaveDeIdempotencia() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
+                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", new byte[]{1, 2, 3}))
+                        .param("senhaCertificado", "qualquer")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -107,7 +151,8 @@ class NfeControllerTest {
                         .file(documentoInvalido)
                         .file(certificado)
                         .param("senhaCertificado", "qualquer")
-                        .header("Authorization", "Bearer " + accessToken))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-teste-invalido"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensagem").value("Dados invalidos no documento enviado"));
     }

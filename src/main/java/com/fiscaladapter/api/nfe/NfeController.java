@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.nfe;
 
+import com.fiscaladapter.api.idempotencia.IdempotenciaService;
 import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoDigitalService;
@@ -11,13 +12,13 @@ import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
 
 /**
  * Endpoint de recebimento de NFe. Nesta fase o certificado do emissor e
@@ -36,11 +37,12 @@ public class NfeController {
     private final NfeXsdValidator xsdValidator;
     private final CertificadoDigitalService certificadoDigitalService;
     private final RegraNegocioService regraNegocioService;
+    private final IdempotenciaService idempotenciaService;
 
     public NfeController(NfeRequestMapper mapper, ChaveAcessoService chaveAcessoService,
                           NfeXmlGenerator xmlGenerator, AssinaturaXmlService assinaturaXmlService,
                           NfeXsdValidator xsdValidator, CertificadoDigitalService certificadoDigitalService,
-                          RegraNegocioService regraNegocioService) {
+                          RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService) {
         this.mapper = mapper;
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
@@ -48,12 +50,22 @@ public class NfeController {
         this.xsdValidator = xsdValidator;
         this.certificadoDigitalService = certificadoDigitalService;
         this.regraNegocioService = regraNegocioService;
+        this.idempotenciaService = idempotenciaService;
     }
 
     @PostMapping(value = "/api/v1/nfe", consumes = "multipart/form-data")
     public ResponseEntity<NfeResponse> emitir(@RequestPart("documento") @Valid NfePedidoEmissaoRequest documento,
                                                @RequestPart("certificado") MultipartFile certificado,
-                                               @RequestParam("senhaCertificado") String senhaCertificado) throws IOException {
+                                               @RequestParam("senhaCertificado") String senhaCertificado,
+                                               @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                               Authentication authentication) {
+        NfeResponse resposta = idempotenciaService.executar(authentication.getName(), idempotencyKey, () ->
+                processar(documento, certificado, senhaCertificado));
+
+        return ResponseEntity.ok(resposta);
+    }
+
+    private NfeResponse processar(NfePedidoEmissaoRequest documento, MultipartFile certificado, String senhaCertificado) {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
 
         regraNegocioService.validar(nfe);
@@ -70,14 +82,19 @@ public class NfeController {
 
         String xmlSemAssinatura = xmlGenerator.gerar(nfe, chaveAcesso);
 
-        CertificadoCarregado certificadoCarregado = certificadoDigitalService.carregar(
-                certificado.getInputStream(), senhaCertificado.toCharArray());
+        CertificadoCarregado certificadoCarregado;
+        try {
+            certificadoCarregado = certificadoDigitalService.carregar(
+                    certificado.getInputStream(), senhaCertificado.toCharArray());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Falha ao ler o arquivo de certificado enviado", e);
+        }
 
         String xmlAssinado = assinaturaXmlService.assinar(
                 xmlSemAssinatura, "NFe" + chaveAcesso, certificadoCarregado);
 
         xsdValidator.validar(xmlAssinado);
 
-        return ResponseEntity.ok(new NfeResponse(chaveAcesso, xmlAssinado));
+        return new NfeResponse(chaveAcesso, xmlAssinado);
     }
 }

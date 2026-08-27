@@ -1,5 +1,6 @@
 package com.fiscaladapter.api;
 
+import com.fiscaladapter.api.idempotencia.RequisicaoEmProcessamentoException;
 import com.fiscaladapter.assinatura.AssinaturaDigitalException;
 import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
@@ -7,6 +8,7 @@ import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -52,5 +54,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErroResposta> tratar(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErroResposta> tratar(MissingRequestHeaderException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErroResposta("Cabecalho obrigatorio ausente: " + e.getHeaderName()));
+    }
+
+    @ExceptionHandler(RequisicaoEmProcessamentoException.class)
+    public ResponseEntity<ErroResposta> tratar(RequisicaoEmProcessamentoException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
     }
 }
