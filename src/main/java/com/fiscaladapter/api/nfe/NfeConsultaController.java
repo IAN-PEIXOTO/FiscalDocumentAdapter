@@ -4,8 +4,10 @@ import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoDigitalService;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
+import com.fiscaladapter.sefaz.nfe.CceResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
 import com.fiscaladapter.sefaz.nfe.NfeCancelamentoClient;
+import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,13 +30,16 @@ public class NfeConsultaController {
 
     private final NfeConsultaProtocoloClient consultaProtocoloClient;
     private final NfeCancelamentoClient cancelamentoClient;
+    private final NfeCceClient cceClient;
     private final CertificadoDigitalService certificadoDigitalService;
 
     public NfeConsultaController(NfeConsultaProtocoloClient consultaProtocoloClient,
                                   NfeCancelamentoClient cancelamentoClient,
+                                  NfeCceClient cceClient,
                                   CertificadoDigitalService certificadoDigitalService) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
+        this.cceClient = cceClient;
         this.certificadoDigitalService = certificadoDigitalService;
     }
 
@@ -67,6 +72,23 @@ public class NfeConsultaController {
 
         return ResponseEntity.ok(new CancelamentoNfeResponse(
                 chaveAcesso, resposta.cancelado(), resposta.codigoStatus(), resposta.motivo()));
+    }
+
+    @PostMapping(value = "/api/v1/nfe/{chaveAcesso}/cartaCorrecao", consumes = "multipart/form-data")
+    public ResponseEntity<CceNfeResponse> corrigir(@PathVariable String chaveAcesso,
+                                                     @RequestParam String uf,
+                                                     @RequestParam TipoAmbiente ambiente,
+                                                     @RequestParam int numeroSequencial,
+                                                     @RequestParam String textoCorrecao,
+                                                     @RequestPart("certificado") MultipartFile certificado,
+                                                     @RequestParam String senhaCertificado) {
+        CertificadoCarregado certificadoCarregado = carregarCertificado(certificado, senhaCertificado);
+
+        CceResponse resposta = cceClient.corrigir(
+                chaveAcesso, numeroSequencial, textoCorrecao, uf, ambiente, certificadoCarregado);
+
+        return ResponseEntity.ok(new CceNfeResponse(
+                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
     }
 
     private CertificadoCarregado carregarCertificado(MultipartFile certificado, String senha) {

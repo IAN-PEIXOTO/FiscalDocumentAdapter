@@ -3,8 +3,10 @@ package com.fiscaladapter.api.nfe;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
+import com.fiscaladapter.sefaz.nfe.CceResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
 import com.fiscaladapter.sefaz.nfe.NfeCancelamentoClient;
+import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,7 @@ import java.time.Instant;
 import java.util.Date;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -48,6 +51,9 @@ class NfeConsultaControllerTest {
 
     @MockBean
     private NfeCancelamentoClient cancelamentoClient;
+
+    @MockBean
+    private NfeCceClient cceClient;
 
     private String clientId;
     private String clientSecret;
@@ -96,6 +102,27 @@ class NfeConsultaControllerTest {
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cancelado").value(true));
+    }
+
+    @Test
+    void deveEmitirCceERetornarProtocolo() throws Exception {
+        when(cceClient.corrigir(any(), anyInt(), any(), any(), any(), any()))
+                .thenReturn(CceResponse.de("135", "Evento registrado e vinculado a NF-e", "135260000000002"));
+
+        String accessToken = obterAccessToken();
+        MockMultipartFile certificado = new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", certificadoDeTeste());
+
+        mockMvc.perform(multipart("/api/v1/nfe/" + CHAVE_ACESSO + "/cartaCorrecao")
+                        .file(certificado)
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroSequencial", "1")
+                        .param("textoCorrecao", "Correcao do endereco de entrega, sem alteracao de valores")
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrada").value(true))
+                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000002"));
     }
 
     @Test
