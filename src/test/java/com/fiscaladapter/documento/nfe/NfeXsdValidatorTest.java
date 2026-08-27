@@ -19,7 +19,7 @@ class NfeXsdValidatorTest {
 
     @Test
     void xmlGeradoDeveSerEstruturalmenteValidoExcetoPelaAssinaturaAindaAusente() {
-        String xml = generator.gerar(new NfeXmlGeneratorTest().notaDeExemplo());
+        String xml = generator.gerar(NotaFiscalEletronicaTestFixture.notaDeExemplo());
 
         assertThatThrownBy(() -> validator.validar(xml))
                 .isInstanceOf(XmlInvalidoException.class)

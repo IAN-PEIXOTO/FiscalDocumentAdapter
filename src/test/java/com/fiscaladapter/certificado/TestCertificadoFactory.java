@@ -23,7 +23,7 @@ import java.util.Date;
  * Gera certificados PKCS#12 auto-assinados em memoria, apenas para teste.
  * Nunca usar em producao - nao tem cadeia de confianca da ICP-Brasil.
  */
-final class TestCertificadoFactory {
+public final class TestCertificadoFactory {
 
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -32,7 +32,7 @@ final class TestCertificadoFactory {
     private TestCertificadoFactory() {
     }
 
-    static byte[] gerarP12(String cnpj, char[] senha, Date validoDe, Date validoAte) throws Exception {
+    public static byte[] gerarP12(String cnpj, char[] senha, Date validoDe, Date validoAte) throws Exception {
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
         keyPairGenerator.initialize(2048);
         KeyPair keyPair = keyPairGenerator.generateKeyPair();
@@ -63,7 +63,7 @@ final class TestCertificadoFactory {
         return out.toByteArray();
     }
 
-    static ByteArrayInputStream comoStream(byte[] p12) {
+    public static ByteArrayInputStream comoStream(byte[] p12) {
         return new ByteArrayInputStream(p12);
     }
 }
