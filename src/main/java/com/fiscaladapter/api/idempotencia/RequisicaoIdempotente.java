@@ -41,6 +41,7 @@ public class RequisicaoIdempotente {
     @Column(nullable = false, length = 20)
     private StatusRequisicaoIdempotente status;
 
+    /** Contem o JSON da resposta criptografado (AES-256-GCM, ver CriptografiaEmRepousoService) - nao texto puro. */
     @Lob
     @Column(name = "resposta_json")
     private String respostaJson;
@@ -63,9 +64,9 @@ public class RequisicaoIdempotente {
         this.expiraEm = expiraEm;
     }
 
-    void concluir(String respostaJson) {
+    void concluir(String respostaCriptografada) {
         this.status = StatusRequisicaoIdempotente.CONCLUIDA;
-        this.respostaJson = respostaJson;
+        this.respostaJson = respostaCriptografada;
     }
 
     boolean expirada(Instant referencia) {

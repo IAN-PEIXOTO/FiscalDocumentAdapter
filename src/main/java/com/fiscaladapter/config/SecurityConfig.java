@@ -6,11 +6,20 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
+
+import java.time.Duration;
 
 /**
  * Protege os endpoints da API com Bearer token (JWT) emitido pelo nosso
  * proprio Authorization Server (ver AuthorizationServerConfig, FIS-15).
  * /health fica publico para health check de infraestrutura.
+ *
+ * Cabecalhos de resposta (FIS-14): HSTS forca HTTPS em clientes que ja
+ * visitaram a API, no-store impede que respostas com dados fiscais sensiveis
+ * (chave de acesso, XML assinado) fiquem em cache de proxy/navegador, e
+ * X-Content-Type-Options/frame-options sao hardening padrao contra
+ * sniffing/clickjacking (esta API nao serve HTML, mas nao custa).
  */
 @Configuration
 public class SecurityConfig {
@@ -23,6 +32,14 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))
+                .headers(headers -> headers
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(Duration.ofDays(365).toSeconds()))
+                        .contentTypeOptions(contentTypeOptions -> {})
+                        .frameOptions(frameOptions -> frameOptions.deny())
+                        .cacheControl(cacheControl -> {})
+                        .addHeaderWriter(new StaticHeadersWriter("X-Permitted-Cross-Domain-Policies", "none")))
                 .addFilterBefore(rateLimitFilter, AuthorizationFilter.class);
         return http.build();
     }

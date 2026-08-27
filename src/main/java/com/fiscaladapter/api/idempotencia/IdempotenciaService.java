@@ -2,6 +2,7 @@ package com.fiscaladapter.api.idempotencia;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.api.nfe.NfeResponse;
+import com.fiscaladapter.seguranca.CriptografiaEmRepousoService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -27,12 +28,15 @@ public class IdempotenciaService {
 
     private final RequisicaoIdempotenteRepository repository;
     private final ObjectMapper objectMapper;
+    private final CriptografiaEmRepousoService criptografiaEmRepousoService;
     private final TransactionTemplate transactionTemplate;
 
     public IdempotenciaService(RequisicaoIdempotenteRepository repository, ObjectMapper objectMapper,
+                                CriptografiaEmRepousoService criptografiaEmRepousoService,
                                 PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.criptografiaEmRepousoService = criptografiaEmRepousoService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -95,14 +99,16 @@ public class IdempotenciaService {
 
     private String serializar(NfeResponse resposta) {
         try {
-            return objectMapper.writeValueAsString(resposta);
+            String json = objectMapper.writeValueAsString(resposta);
+            return criptografiaEmRepousoService.criptografar(json);
         } catch (Exception e) {
             throw new IllegalStateException("Falha ao serializar resposta para cache de idempotencia", e);
         }
     }
 
-    private NfeResponse desserializar(String json) {
+    private NfeResponse desserializar(String respostaCriptografada) {
         try {
+            String json = criptografiaEmRepousoService.descriptografar(respostaCriptografada);
             return objectMapper.readValue(json, NfeResponse.class);
         } catch (Exception e) {
             throw new IllegalStateException("Falha ao desserializar resposta em cache de idempotencia", e);

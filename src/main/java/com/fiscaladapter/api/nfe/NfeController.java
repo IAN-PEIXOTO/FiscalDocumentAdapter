@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Endpoint de recebimento de NFe. Nesta fase o certificado do emissor e
@@ -66,12 +67,15 @@ public class NfeController {
 
         regraNegocioService.validar(nfe);
 
+        char[] senha = senhaCertificado.toCharArray();
         CertificadoCarregado certificadoCarregado;
         try {
-            certificadoCarregado = certificadoDigitalService.carregar(
-                    certificado.getInputStream(), senhaCertificado.toCharArray());
+            certificadoCarregado = certificadoDigitalService.carregar(certificado.getInputStream(), senha);
         } catch (IOException e) {
             throw new IllegalStateException("Falha ao ler o arquivo de certificado enviado", e);
+        } finally {
+            // A senha nunca deve permanecer na heap mais tempo que o necessario (FIS-14).
+            Arrays.fill(senha, '\0');
         }
 
         ResultadoEmissaoNfe resultado = emissaoNfeOrquestrador.emitir(nfe, certificadoCarregado);

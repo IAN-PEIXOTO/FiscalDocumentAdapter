@@ -18,3 +18,11 @@ server:
 
 fiscaladapter:
   ambiente: dev
+  seguranca:
+    # Chave AES-256 (base64, 32 bytes) usada para criptografar dados sensiveis em
+    # repouso (ex.: resposta de idempotencia com XML assinado da NFe - ver
+    # CriptografiaEmRepousoService). Valor abaixo e fixo so para dev/teste local;
+    # em homolog/prod DEVE vir de variavel de ambiente/secret manager, nunca
+    # commitado (mesmo cuidado documentado para a chave RSA do Authorization
+    # Server em AuthorizationServerConfig).
+    chave-criptografia: ${FISCALADAPTER_CHAVE_CRIPTOGRAFIA:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
