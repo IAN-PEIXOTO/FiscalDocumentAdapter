@@ -27,6 +27,7 @@ public class NfeAutorizacaoClient {
     private static final Pattern TAG_CSTAT_PROT = Pattern.compile("<cStat>(\\d+)</cStat>");
     private static final Pattern TAG_XMOTIVO_PROT = Pattern.compile("<xMotivo>(.*?)</xMotivo>");
     private static final Pattern TAG_NPROT = Pattern.compile("<nProt>(\\d+)</nProt>");
+    private static final Pattern TAG_DHRECBTO = Pattern.compile("<dhRecbto>(.*?)</dhRecbto>");
 
     private final SefazEndpointRegistry endpointRegistry;
     private final SefazHttpClientFactory httpClientFactory;
@@ -84,10 +85,12 @@ public class NfeAutorizacaoClient {
             Matcher matcherStat = TAG_CSTAT_PROT.matcher(blocoProtocolo);
             Matcher matcherMotivo = TAG_XMOTIVO_PROT.matcher(blocoProtocolo);
             Matcher matcherProt = TAG_NPROT.matcher(blocoProtocolo);
+            Matcher matcherDhRecbto = TAG_DHRECBTO.matcher(blocoProtocolo);
             String cStat = matcherStat.find() ? matcherStat.group(1) : "";
             String xMotivo = matcherMotivo.find() ? matcherMotivo.group(1) : "";
             String nProt = matcherProt.find() ? matcherProt.group(1) : null;
-            return AutorizacaoResponse.de(cStat, xMotivo, nProt);
+            String dhRecbto = matcherDhRecbto.find() ? matcherDhRecbto.group(1) : null;
+            return AutorizacaoResponse.de(cStat, xMotivo, nProt, dhRecbto);
         }
 
         // sem protNFe: lote rejeitado antes de processar o documento (ex.: erro de schema/duplicidade de lote)
@@ -98,6 +101,6 @@ public class NfeAutorizacaoClient {
         }
         String cStat = matcherStatRaiz.group(1);
         String xMotivo = matcherMotivoRaiz.find() ? matcherMotivoRaiz.group(1) : "";
-        return AutorizacaoResponse.de(cStat, xMotivo, null);
+        return AutorizacaoResponse.de(cStat, xMotivo, null, null);
     }
 }

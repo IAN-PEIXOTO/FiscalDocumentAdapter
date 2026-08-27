@@ -52,7 +52,7 @@ class EmissaoNfeOrquestradorTest {
         CertificadoCarregado certificado = certificadoDeTeste();
 
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
-                .thenReturn(AutorizacaoResponse.de("100", "Autorizado o uso da NF-e", "135260000000001"));
+                .thenReturn(AutorizacaoResponse.de("100", "Autorizado o uso da NF-e", "135260000000001", "2026-03-15T10:00:00-03:00"));
 
         ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
 
@@ -71,7 +71,7 @@ class EmissaoNfeOrquestradorTest {
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenThrow(new SefazComunicacaoException("timeout"));
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
-                .thenReturn(AutorizacaoResponse.de("100", "Autorizado o uso da NF-e", "135260000000002"));
+                .thenReturn(AutorizacaoResponse.de("100", "Autorizado o uso da NF-e", "135260000000002", "2026-03-15T10:00:00-03:00"));
 
         ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
 

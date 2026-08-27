@@ -75,7 +75,8 @@ class NfeControllerTest {
         // a comunicacao real com a SEFAZ e testada separadamente (com.fiscaladapter.sefaz.nfe.*Test);
         // aqui simulamos uma autorizacao bem-sucedida para testar so a orquestracao do controller
         when(autorizacaoClient.autorizar(any(), any(), any(), any()))
-                .thenReturn(new AutorizacaoResponse("100", "Autorizado o uso da NF-e", "135260000000001", true));
+                .thenReturn(new AutorizacaoResponse("100", "Autorizado o uso da NF-e", "135260000000001",
+                        "2026-03-15T10:00:00-03:00", true));
     }
 
     @Test
@@ -91,13 +92,14 @@ class NfeControllerTest {
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
                 .andExpect(jsonPath("$.xmlAssinado").exists())
                 .andExpect(jsonPath("$.autorizada").value(true))
-                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000001"));
+                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000001"))
+                .andExpect(jsonPath("$.danfePdfBase64").isNotEmpty());
     }
 
     @Test
     void deveRetornarRespostaComRejeicaoQuandoSefazRecusaODocumento() throws Exception {
         when(autorizacaoClient.autorizar(any(), any(), any(), any()))
-                .thenReturn(new AutorizacaoResponse("539", "Duplicidade de NF-e", null, false));
+                .thenReturn(new AutorizacaoResponse("539", "Duplicidade de NF-e", null, null, false));
 
         String accessToken = obterAccessToken();
 
@@ -108,7 +110,8 @@ class NfeControllerTest {
                         .header("Idempotency-Key", "chave-rejeicao"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.autorizada").value(false))
-                .andExpect(jsonPath("$.codigoStatusSefaz").value("539"));
+                .andExpect(jsonPath("$.codigoStatusSefaz").value("539"))
+                .andExpect(jsonPath("$.danfePdfBase64").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

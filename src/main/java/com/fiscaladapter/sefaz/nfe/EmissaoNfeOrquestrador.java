@@ -125,7 +125,7 @@ public class EmissaoNfeOrquestrador {
                     + "(protocolo definitivo pendente ate a retomada da transmissao normal, ver FIS-30)", uf);
 
             AutorizacaoResponse autorizacaoProvisoria = new AutorizacaoResponse(
-                    resposta.codigoStatus(), resposta.motivo(), null, false);
+                    resposta.codigoStatus(), resposta.motivo(), null, null, false);
             return new ResultadoEmissaoNfe(epec.chaveAcesso(), epec.xmlAssinado(), autorizacaoProvisoria, true, true);
         } catch (SefazComunicacaoException falhaEpec) {
             metrics.registrarErroComunicacao(cronometro);

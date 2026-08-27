@@ -27,7 +27,7 @@ class NfeAutorizacaoClientTest {
                     + "<retEnviNFe versao=\"4.00\" xmlns=\"http://www.portalfiscal.inf.br/nfe\">"
                     + "<tpAmb>2</tpAmb><verAplic>SP1.0</verAplic><cStat>103</cStat><xMotivo>Lote recebido com sucesso</xMotivo>"
                     + "<protNFe versao=\"4.00\"><infProt><tpAmb>2</tpAmb><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo>"
-                    + "<nProt>135260000000001</nProt></infProt></protNFe>"
+                    + "<nProt>135260000000001</nProt><dhRecbto>2026-03-15T10:00:00-03:00</dhRecbto></infProt></protNFe>"
                     + "</retEnviNFe>"
                     + "</nfeResultMsg></soap:Body></soap:Envelope>";
 
@@ -48,6 +48,7 @@ class NfeAutorizacaoClientTest {
 
             assertThat(resposta.autorizada()).isTrue();
             assertThat(resposta.numeroProtocolo()).isEqualTo("135260000000001");
+            assertThat(resposta.dhRecbto()).isEqualTo("2026-03-15T10:00:00-03:00");
         }
     }
 
