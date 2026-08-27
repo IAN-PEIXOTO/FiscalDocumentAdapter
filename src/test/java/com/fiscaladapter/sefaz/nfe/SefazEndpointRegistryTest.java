@@ -40,10 +40,10 @@ class SefazEndpointRegistryTest {
     }
 
     @Test
-    void deveResolverRecepcaoEventoDaSvcRsParaEpec() {
-        assertThat(registry.obterUrl("SVC-RS", TipoAmbiente.PRODUCAO, TipoServicoSefaz.RECEPCAO_EVENTO))
+    void deveResolverRecepcaoEventoDoAmbienteNacionalParaEpecEManifestacao() {
+        assertThat(registry.obterUrl("AN", TipoAmbiente.PRODUCAO, TipoServicoSefaz.RECEPCAO_EVENTO))
                 .startsWith("https://");
-        assertThat(registry.obterUrl("SVC-RS", TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.RECEPCAO_EVENTO))
+        assertThat(registry.obterUrl("AN", TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.RECEPCAO_EVENTO))
                 .startsWith("https://");
     }
 

@@ -27,11 +27,13 @@ import java.util.regex.Pattern;
  * de fato autorizada quando puder ser transmitida normalmente, o que exige uma
  * fila de retomada assincrona (fora do escopo aqui - ver FIS-30).
  *
- * O evento EPEC e sempre recebido pela SVC-RS (cOrgao=91 fixo, independente da
- * UF do emitente) - estrutura conferida contra o XSD oficial (eventoEPEC_v1.00)
- * e a implementacao de referencia nfephp-org/sped-nfe (Tools::sefazEPEC),
- * incluindo o codigo de sucesso do evento (cStat 136, diferente do 135 usado
- * por cancelamento/CC-e).
+ * O evento EPEC e sempre recebido pelo Ambiente Nacional - AN (cOrgao=91 fixo,
+ * independente da UF do emitente; NAO e a SVC-RS, que tem seu proprio codigo
+ * 93 e nem sequer expõe RecepcaoEvento para uso geral) - estrutura conferida
+ * contra o XSD oficial (eventoEPEC_v1.00), a base de enderecos e a
+ * implementacao de referencia nfephp-org/sped-nfe (Tools::sefazEPEC,
+ * storage/wsnfe_4.00_mod55.xml, sped-common/UFList), incluindo o codigo de
+ * sucesso do evento (cStat 136, diferente do 135 usado por cancelamento/CC-e).
  */
 @Component
 public class NfeEpecClient {
@@ -57,7 +59,7 @@ public class NfeEpecClient {
 
     public EpecResponse registrar(NotaFiscalEletronica nfe, String chaveAcesso, TipoAmbiente ambiente,
                                    CertificadoCarregado certificado) {
-        String url = endpointRegistry.obterUrl("SVC-RS", ambiente, TipoServicoSefaz.RECEPCAO_EVENTO);
+        String url = endpointRegistry.obterUrl("AN", ambiente, TipoServicoSefaz.RECEPCAO_EVENTO);
         return registrar(url, nfe, chaveAcesso, ambiente, certificado, httpClientFactory.criar(certificado));
     }
 

@@ -8,10 +8,13 @@ import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.CceResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
 import com.fiscaladapter.sefaz.nfe.InutilizacaoResponse;
+import com.fiscaladapter.sefaz.nfe.ManifestacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeCancelamentoClient;
 import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
+import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
+import com.fiscaladapter.sefaz.nfe.TipoManifestacaoDestinatario;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +34,7 @@ public class NfeConsultaController {
     private final NfeCancelamentoClient cancelamentoClient;
     private final NfeCceClient cceClient;
     private final NfeInutilizacaoClient inutilizacaoClient;
+    private final NfeManifestacaoDestinatarioClient manifestacaoDestinatarioClient;
     private final CertificadoEmissorService certificadoEmissorService;
     private final ChaveAcessoService chaveAcessoService;
 
@@ -38,12 +42,14 @@ public class NfeConsultaController {
                                   NfeCancelamentoClient cancelamentoClient,
                                   NfeCceClient cceClient,
                                   NfeInutilizacaoClient inutilizacaoClient,
+                                  NfeManifestacaoDestinatarioClient manifestacaoDestinatarioClient,
                                   CertificadoEmissorService certificadoEmissorService,
                                   ChaveAcessoService chaveAcessoService) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.cceClient = cceClient;
         this.inutilizacaoClient = inutilizacaoClient;
+        this.manifestacaoDestinatarioClient = manifestacaoDestinatarioClient;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
     }
@@ -110,6 +116,28 @@ public class NfeConsultaController {
 
         return ResponseEntity.ok(new InutilizacaoNfeResponse(
                 resposta.inutilizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
+    }
+
+    /**
+     * Manifestacao do Destinatario (FIS-9/FIS-40): quem manifesta e o
+     * DESTINATARIO da NFe, usando o certificado do seu proprio CNPJ (nao o do
+     * emitente) - por isso cnpjManifestante e explicito e nao derivado da
+     * chave de acesso, que so contem o CNPJ do emitente.
+     */
+    @PostMapping("/api/v1/nfe/{chaveAcesso}/manifestacao")
+    public ResponseEntity<ManifestacaoNfeResponse> manifestar(@PathVariable String chaveAcesso,
+                                                                @RequestParam TipoAmbiente ambiente,
+                                                                @RequestParam String cnpjManifestante,
+                                                                @RequestParam TipoManifestacaoDestinatario tipo,
+                                                                @RequestParam(required = false) String justificativa) {
+        CertificadoCarregado certificadoCarregado =
+                certificadoEmissorService.carregar(cnpjManifestante.replaceAll("\\D", ""));
+
+        ManifestacaoResponse resposta = manifestacaoDestinatarioClient.manifestar(
+                chaveAcesso, tipo, justificativa, ambiente, certificadoCarregado);
+
+        return ResponseEntity.ok(new ManifestacaoNfeResponse(
+                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
     }
 
     private CertificadoCarregado carregarCertificado(String chaveAcesso) {

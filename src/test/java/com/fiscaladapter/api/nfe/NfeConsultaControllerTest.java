@@ -7,10 +7,12 @@ import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.CceResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
 import com.fiscaladapter.sefaz.nfe.InutilizacaoResponse;
+import com.fiscaladapter.sefaz.nfe.ManifestacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeCancelamentoClient;
 import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
+import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,6 +68,9 @@ class NfeConsultaControllerTest {
 
     @MockBean
     private NfeInutilizacaoClient inutilizacaoClient;
+
+    @MockBean
+    private NfeManifestacaoDestinatarioClient manifestacaoDestinatarioClient;
 
     private String clientId;
     private String clientSecret;
@@ -151,6 +156,23 @@ class NfeConsultaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inutilizada").value(true))
                 .andExpect(jsonPath("$.numeroProtocolo").value("135260000000003"));
+    }
+
+    @Test
+    void deveManifestarERetornarConfirmacao() throws Exception {
+        when(manifestacaoDestinatarioClient.manifestar(any(), any(), any(), any(), any()))
+                .thenReturn(ManifestacaoResponse.de("135", "Evento registrado e vinculado a NF-e", "135260000000004"));
+
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/manifestacao")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("cnpjManifestante", "12345678000199")
+                        .param("tipo", "CIENCIA_DA_OPERACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrada").value(true))
+                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000004"));
     }
 
     @Test
