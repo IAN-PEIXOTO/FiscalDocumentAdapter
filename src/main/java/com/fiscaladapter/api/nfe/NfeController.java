@@ -10,6 +10,8 @@ import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
+import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
+import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -38,11 +40,13 @@ public class NfeController {
     private final CertificadoDigitalService certificadoDigitalService;
     private final RegraNegocioService regraNegocioService;
     private final IdempotenciaService idempotenciaService;
+    private final NfeAutorizacaoClient autorizacaoClient;
 
     public NfeController(NfeRequestMapper mapper, ChaveAcessoService chaveAcessoService,
                           NfeXmlGenerator xmlGenerator, AssinaturaXmlService assinaturaXmlService,
                           NfeXsdValidator xsdValidator, CertificadoDigitalService certificadoDigitalService,
-                          RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService) {
+                          RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService,
+                          NfeAutorizacaoClient autorizacaoClient) {
         this.mapper = mapper;
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
@@ -51,6 +55,7 @@ public class NfeController {
         this.certificadoDigitalService = certificadoDigitalService;
         this.regraNegocioService = regraNegocioService;
         this.idempotenciaService = idempotenciaService;
+        this.autorizacaoClient = autorizacaoClient;
     }
 
     @PostMapping(value = "/api/v1/nfe", consumes = "multipart/form-data")
@@ -95,6 +100,10 @@ public class NfeController {
 
         xsdValidator.validar(xmlAssinado);
 
-        return new NfeResponse(chaveAcesso, xmlAssinado);
+        AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
+                xmlAssinado, nfe.identificacao().uf(), nfe.identificacao().ambiente(), certificadoCarregado);
+
+        return new NfeResponse(chaveAcesso, xmlAssinado, autorizacao.autorizada(),
+                autorizacao.codigoStatus(), autorizacao.motivo(), autorizacao.numeroProtocolo());
     }
 }

@@ -5,6 +5,7 @@ import com.fiscaladapter.assinatura.AssinaturaDigitalException;
 import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
+import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -65,5 +66,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RequisicaoEmProcessamentoException.class)
     public ResponseEntity<ErroResposta> tratar(RequisicaoEmProcessamentoException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(SefazComunicacaoException.class)
+    public ResponseEntity<ErroResposta> tratar(SefazComunicacaoException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ErroResposta("Falha de comunicacao com a SEFAZ: " + e.getMessage()));
     }
 }

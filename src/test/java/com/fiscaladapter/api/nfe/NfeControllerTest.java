@@ -2,12 +2,15 @@ package com.fiscaladapter.api.nfe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
+import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,6 +21,8 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -44,6 +49,9 @@ class NfeControllerTest {
     @Autowired
     private ClienteApiService clienteApiService;
 
+    @MockBean
+    private NfeAutorizacaoClient autorizacaoClient;
+
     private String clientId;
     private String clientSecret;
 
@@ -52,6 +60,11 @@ class NfeControllerTest {
         ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste");
         this.clientId = credenciais.clientId();
         this.clientSecret = credenciais.clientSecret();
+
+        // a comunicacao real com a SEFAZ e testada separadamente (com.fiscaladapter.sefaz.nfe.*Test);
+        // aqui simulamos uma autorizacao bem-sucedida para testar so a orquestracao do controller
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenReturn(new AutorizacaoResponse("100", "Autorizado o uso da NF-e", "135260000000001", true));
     }
 
     @Test
@@ -77,7 +90,51 @@ class NfeControllerTest {
                         .header("Idempotency-Key", "chave-teste-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
-                .andExpect(jsonPath("$.xmlAssinado").exists());
+                .andExpect(jsonPath("$.xmlAssinado").exists())
+                .andExpect(jsonPath("$.autorizada").value(true))
+                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000001"));
+    }
+
+    @Test
+    void deveRetornarRespostaComRejeicaoQuandoSefazRecusaODocumento() throws Exception {
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenReturn(new AutorizacaoResponse("539", "Duplicidade de NF-e", null, false));
+
+        String accessToken = obterAccessToken();
+        byte[] p12 = TestCertificadoFactory.gerarP12(
+                "12345678000199", "senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))),
+                Date.from(Instant.now().plus(Duration.ofDays(365))));
+
+        mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
+                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-rejeicao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.autorizada").value(false))
+                .andExpect(jsonPath("$.codigoStatusSefaz").value("539"));
+    }
+
+    @Test
+    void deveRetornarBadGatewayQuandoFalhaComunicacaoComSefaz() throws Exception {
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenThrow(new com.fiscaladapter.sefaz.SefazComunicacaoException("timeout de conexao"));
+
+        String accessToken = obterAccessToken();
+        byte[] p12 = TestCertificadoFactory.gerarP12(
+                "12345678000199", "senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))),
+                Date.from(Instant.now().plus(Duration.ofDays(365))));
+
+        mockMvc.perform(multipart("/api/v1/nfe")
+                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
+                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
+                        .param("senhaCertificado", "senha123")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-falha-comunicacao"))
+                .andExpect(status().isBadGateway());
     }
 
     @Test
