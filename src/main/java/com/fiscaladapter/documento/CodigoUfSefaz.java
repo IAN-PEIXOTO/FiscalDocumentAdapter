@@ -25,4 +25,13 @@ public final class CodigoUfSefaz {
         }
         return codigo;
     }
+
+    public static String uf(int codigoNumerico) {
+        String codigo = String.valueOf(codigoNumerico);
+        return CODIGOS.entrySet().stream()
+                .filter(e -> e.getValue().equals(codigo))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Codigo de UF desconhecido: " + codigoNumerico));
+    }
 }

@@ -20,6 +20,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * O payload usado aqui segue o mesmo formato da API ACBr
+ * (https://dev.acbr.api.br/docs/api - schema NfePedidoEmissao), para que
+ * sistemas ja integrados com ela troquem apenas a URL de destino.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 class NfeControllerTest {
@@ -39,7 +44,7 @@ class NfeControllerTest {
 
         MockMultipartFile documento = new MockMultipartFile(
                 "documento", "documento.json", "application/json",
-                objectMapper.writeValueAsBytes(requestValido()));
+                objectMapper.writeValueAsBytes(pedidoValido()));
         MockMultipartFile certificado = new MockMultipartFile(
                 "certificado", "certificado.p12", "application/x-pkcs12", p12);
 
@@ -67,25 +72,32 @@ class NfeControllerTest {
                 .andExpect(jsonPath("$.mensagem").value("Dados invalidos no documento enviado"));
     }
 
-    private NfeRequest requestValido() {
-        EnderecoRequest enderecoEmitente = new EnderecoRequest("Rua Teste", "100", "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1130000000");
-        EmitenteRequest emitente = new EmitenteRequest("12345678000199", "EMPRESA TESTE LTDA", "TESTE", "111222333", "1", enderecoEmitente);
+    private NfePedidoEmissaoRequest pedidoValido() {
+        EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
+        EmitRequest emit = new EmitRequest("12345678000199", null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
 
-        EnderecoRequest enderecoDestinatario = new EnderecoRequest("Av. Cliente", "200", "Jardins", "3550308", "Sao Paulo", "SP", "02000000", null);
-        DestinatarioRequest destinatario = new DestinatarioRequest("98765432100", "CLIENTE TESTE", "9", null, "cliente@teste.com", enderecoDestinatario);
+        EnderecoNfeRequest enderecoDestinatario = new EnderecoNfeRequest("Av. Cliente", "200", null, "Jardins", "3550308", "Sao Paulo", "SP", "02000000", "1058", "Brasil", null);
+        DestRequest dest = new DestRequest(null, "98765432100", null, "CLIENTE TESTE", enderecoDestinatario, 9, null, null, null, "cliente@teste.com");
 
-        ImpostoItemRequest imposto = new ImpostoItemRequest("0", "00",
-                BigDecimal.valueOf(100.00), BigDecimal.valueOf(18.00), BigDecimal.valueOf(18.00),
-                BigDecimal.ZERO, BigDecimal.valueOf(1.65), BigDecimal.valueOf(7.60));
+        Icms00Request icms00 = new Icms00Request("0", "00", 3, BigDecimal.valueOf(100.00), BigDecimal.valueOf(18.00), BigDecimal.valueOf(18.00));
+        PisAliqRequest pisAliq = new PisAliqRequest("01", BigDecimal.valueOf(100.00), BigDecimal.valueOf(1.65), BigDecimal.valueOf(1.65));
+        CofinsAliqRequest cofinsAliq = new CofinsAliqRequest("01", BigDecimal.valueOf(100.00), BigDecimal.valueOf(7.60), BigDecimal.valueOf(7.60));
+        ImpostoRequest imposto = new ImpostoRequest(new IcmsRequest(icms00), null, new PisRequest(pisAliq), new CofinsRequest(cofinsAliq));
 
-        ItemRequest item = new ItemRequest(1, "PROD001", "PRODUTO TESTE", "61099010", "5102", "UN",
-                BigDecimal.ONE, BigDecimal.valueOf(100.00), BigDecimal.valueOf(100.00), imposto);
+        ProdRequest prod = new ProdRequest("PROD001", "SEM GTIN", "PRODUTO TESTE", "61099010", "5102", "UN",
+                BigDecimal.ONE, BigDecimal.valueOf(100.00), BigDecimal.valueOf(100.00),
+                "SEM GTIN", "UN", BigDecimal.ONE, BigDecimal.valueOf(100.00), 1);
 
-        IdentificacaoRequest identificacao = new IdentificacaoRequest("SP", "VENDA DE MERCADORIA", 1, 42L,
-                LocalDate.of(2026, 3, 15), "HOMOLOGACAO", 1, true, "3550308");
+        DetRequest det = new DetRequest(1, prod, imposto);
 
-        PagamentoRequest pagamento = new PagamentoRequest("01", BigDecimal.valueOf(100.00));
+        IdeRequest ide = new IdeRequest(35, "VENDA DE MERCADORIA", 1, 42L, LocalDate.of(2026, 3, 15),
+                1, 1, "3550308", 1, 1, 2, 1, 1, 9, 0, "1.0.0");
 
-        return new NfeRequest(identificacao, emitente, destinatario, List.of(item), List.of(pagamento));
+        TranspRequest transp = new TranspRequest(9);
+        PagRequest pag = new PagRequest(List.of(new DetPagRequest("01", BigDecimal.valueOf(100.00))));
+
+        InfNfeRequest infNFe = new InfNfeRequest(ide, emit, dest, List.of(det), transp, pag);
+
+        return new NfePedidoEmissaoRequest("homologacao", "teste-001", infNFe);
     }
 }

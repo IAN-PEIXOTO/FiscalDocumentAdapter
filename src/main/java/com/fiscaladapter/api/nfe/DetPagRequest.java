@@ -6,8 +6,9 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 
-public record PagamentoRequest(
-        @NotBlank String codigoFormaPagamento,
-        @NotNull @Positive BigDecimal valor
+/** Espelha NfeSefazDetPag (subconjunto: campos mais comuns). */
+public record DetPagRequest(
+        @NotBlank String tPag,
+        @NotNull @Positive BigDecimal vPag
 ) {
 }

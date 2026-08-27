@@ -47,7 +47,7 @@ public class NfeController {
     }
 
     @PostMapping(value = "/api/v1/nfe", consumes = "multipart/form-data")
-    public ResponseEntity<NfeResponse> emitir(@RequestPart("documento") @Valid NfeRequest documento,
+    public ResponseEntity<NfeResponse> emitir(@RequestPart("documento") @Valid NfePedidoEmissaoRequest documento,
                                                @RequestPart("certificado") MultipartFile certificado,
                                                @RequestParam("senhaCertificado") String senhaCertificado) throws IOException {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
