@@ -1,6 +1,7 @@
 package com.fiscaladapter.api.nfe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
@@ -11,7 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -24,7 +25,6 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,11 +34,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (https://dev.acbr.api.br/docs/api - schema NfePedidoEmissao), para que
  * sistemas ja integrados com ela troquem apenas a URL de destino. A
  * autenticacao segue o mesmo padrao tambem: OAuth2 client_credentials
- * (FIS-15).
+ * (FIS-15). O certificado do emissor e resolvido pelo CNPJ do payload a
+ * partir do que foi registrado via POST /api/v1/certificados (FIS-2).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 class NfeControllerTest {
+
+    private static final String CNPJ_EMISSOR = "12345678000199";
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,6 +52,9 @@ class NfeControllerTest {
     @Autowired
     private ClienteApiService clienteApiService;
 
+    @Autowired
+    private CertificadoEmissorService certificadoEmissorService;
+
     @MockBean
     private NfeAutorizacaoClient autorizacaoClient;
 
@@ -56,10 +62,15 @@ class NfeControllerTest {
     private String clientSecret;
 
     @BeforeEach
-    void criarClienteDeTeste() {
+    void prepararCenario() throws Exception {
         ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste");
         this.clientId = credenciais.clientId();
         this.clientSecret = credenciais.clientSecret();
+
+        byte[] p12 = TestCertificadoFactory.gerarP12(CNPJ_EMISSOR, "senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))),
+                Date.from(Instant.now().plus(Duration.ofDays(365))));
+        certificadoEmissorService.registrar(p12, "senha123".toCharArray());
 
         // a comunicacao real com a SEFAZ e testada separadamente (com.fiscaladapter.sefaz.nfe.*Test);
         // aqui simulamos uma autorizacao bem-sucedida para testar so a orquestracao do controller
@@ -71,21 +82,9 @@ class NfeControllerTest {
     void deveEmitirNfeComSucessoRetornandoChaveEXmlAssinado() throws Exception {
         String accessToken = obterAccessToken();
 
-        byte[] p12 = TestCertificadoFactory.gerarP12(
-                "12345678000199", "senha123".toCharArray(),
-                Date.from(Instant.now().minus(Duration.ofDays(1))),
-                Date.from(Instant.now().plus(Duration.ofDays(365))));
-
-        MockMultipartFile documento = new MockMultipartFile(
-                "documento", "documento.json", "application/json",
-                objectMapper.writeValueAsBytes(pedidoValido()));
-        MockMultipartFile certificado = new MockMultipartFile(
-                "certificado", "certificado.p12", "application/x-pkcs12", p12);
-
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(documento)
-                        .file(certificado)
-                        .param("senhaCertificado", "senha123")
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-teste-001"))
                 .andExpect(status().isOk())
@@ -101,15 +100,10 @@ class NfeControllerTest {
                 .thenReturn(new AutorizacaoResponse("539", "Duplicidade de NF-e", null, false));
 
         String accessToken = obterAccessToken();
-        byte[] p12 = TestCertificadoFactory.gerarP12(
-                "12345678000199", "senha123".toCharArray(),
-                Date.from(Instant.now().minus(Duration.ofDays(1))),
-                Date.from(Instant.now().plus(Duration.ofDays(365))));
 
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
-                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
-                        .param("senhaCertificado", "senha123")
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-rejeicao"))
                 .andExpect(status().isOk())
@@ -127,15 +121,10 @@ class NfeControllerTest {
                 .thenThrow(new com.fiscaladapter.sefaz.SefazComunicacaoException("timeout na contingencia"));
 
         String accessToken = obterAccessToken();
-        byte[] p12 = TestCertificadoFactory.gerarP12(
-                "12345678000199", "senha123".toCharArray(),
-                Date.from(Instant.now().minus(Duration.ofDays(1))),
-                Date.from(Instant.now().plus(Duration.ofDays(365))));
 
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
-                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
-                        .param("senhaCertificado", "senha123")
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-falha-comunicacao"))
                 .andExpect(status().isBadGateway());
@@ -144,15 +133,10 @@ class NfeControllerTest {
     @Test
     void reenviarComMesmaChaveDeIdempotenciaDeveRetornarMesmaRespostaSemReprocessar() throws Exception {
         String accessToken = obterAccessToken();
-        byte[] p12 = TestCertificadoFactory.gerarP12(
-                "12345678000199", "senha123".toCharArray(),
-                Date.from(Instant.now().minus(Duration.ofDays(1))),
-                Date.from(Instant.now().plus(Duration.ofDays(365))));
 
-        String respostaPrimeiraChamada = mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
-                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
-                        .param("senhaCertificado", "senha123")
+        String respostaPrimeiraChamada = mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-repetida"))
                 .andExpect(status().isOk())
@@ -160,10 +144,9 @@ class NfeControllerTest {
 
         // segunda tentativa com o MESMO numero de nota (nNF=42): se fosse reprocessada,
         // a numeracao sequencial atribuiria um numero diferente e a chave de acesso mudaria
-        String respostaSegundaChamada = mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
-                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", p12))
-                        .param("senhaCertificado", "senha123")
+        String respostaSegundaChamada = mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-repetida"))
                 .andExpect(status().isOk())
@@ -176,26 +159,18 @@ class NfeControllerTest {
     void deveRejeitarRequisicaoSemChaveDeIdempotencia() throws Exception {
         String accessToken = obterAccessToken();
 
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(new MockMultipartFile("documento", "d.json", "application/json", objectMapper.writeValueAsBytes(pedidoValido())))
-                        .file(new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", new byte[]{1, 2, 3}))
-                        .param("senhaCertificado", "qualquer")
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void deveRejeitarRequisicaoSemToken() throws Exception {
-        MockMultipartFile documento = new MockMultipartFile(
-                "documento", "documento.json", "application/json",
-                objectMapper.writeValueAsBytes(pedidoValido()));
-        MockMultipartFile certificado = new MockMultipartFile(
-                "certificado", "certificado.p12", "application/x-pkcs12", new byte[]{1, 2, 3});
-
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(documento)
-                        .file(certificado)
-                        .param("senhaCertificado", "qualquer"))
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido())))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -203,19 +178,33 @@ class NfeControllerTest {
     void deveRejeitarDocumentoComCamposObrigatoriosFaltando() throws Exception {
         String accessToken = obterAccessToken();
 
-        MockMultipartFile documentoInvalido = new MockMultipartFile(
-                "documento", "documento.json", "application/json", "{}".getBytes());
-        MockMultipartFile certificado = new MockMultipartFile(
-                "certificado", "certificado.p12", "application/x-pkcs12", new byte[]{1, 2, 3});
-
-        mockMvc.perform(multipart("/api/v1/nfe")
-                        .file(documentoInvalido)
-                        .file(certificado)
-                        .param("senhaCertificado", "qualquer")
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-teste-invalido"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensagem").value("Dados invalidos no documento enviado"));
+    }
+
+    @Test
+    void deveRetornarNotFoundQuandoEmissorNaoTemCertificadoRegistrado() throws Exception {
+        String accessToken = obterAccessToken();
+
+        NfePedidoEmissaoRequest pedidoSemCertificado = pedidoValido();
+        EmitRequest emitSemCertificado = new EmitRequest("00000000000000", null, "EMPRESA SEM CERTIFICADO", "TESTE",
+                pedidoSemCertificado.infNFe().emit().enderEmit(), "111222333", null, null, null, "1");
+        InfNfeRequest infNFe = new InfNfeRequest(pedidoSemCertificado.infNFe().ide(), emitSemCertificado,
+                pedidoSemCertificado.infNFe().dest(), pedidoSemCertificado.infNFe().det(),
+                pedidoSemCertificado.infNFe().transp(), pedidoSemCertificado.infNFe().pag());
+        NfePedidoEmissaoRequest pedido = new NfePedidoEmissaoRequest("homologacao", "teste-002", infNFe);
+
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedido))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-sem-certificado"))
+                .andExpect(status().isNotFound());
     }
 
     private String obterAccessToken() throws Exception {
@@ -231,7 +220,7 @@ class NfeControllerTest {
 
     private NfePedidoEmissaoRequest pedidoValido() {
         EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
-        EmitRequest emit = new EmitRequest("12345678000199", null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
+        EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
 
         EnderecoNfeRequest enderecoDestinatario = new EnderecoNfeRequest("Av. Cliente", "200", null, "Jardins", "3550308", "Sao Paulo", "SP", "02000000", "1058", "Brasil", null);
         DestRequest dest = new DestRequest(null, "98765432100", null, "CLIENTE TESTE", enderecoDestinatario, 9, null, null, null, "cliente@teste.com");

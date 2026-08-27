@@ -3,6 +3,7 @@ package com.fiscaladapter.api;
 import com.fiscaladapter.api.idempotencia.RequisicaoEmProcessamentoException;
 import com.fiscaladapter.assinatura.AssinaturaDigitalException;
 import com.fiscaladapter.certificado.CertificadoInvalidoException;
+import com.fiscaladapter.certificado.CertificadoNaoEncontradoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
@@ -56,6 +57,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CertificadoInvalidoException.class)
     public ResponseEntity<ErroResposta> tratar(CertificadoInvalidoException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(CertificadoNaoEncontradoException.class)
+    public ResponseEntity<ErroResposta> tratar(CertificadoNaoEncontradoException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErroResposta(e.getMessage()));
     }
 
     @ExceptionHandler(AssinaturaDigitalException.class)

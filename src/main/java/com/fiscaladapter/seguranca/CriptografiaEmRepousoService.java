@@ -44,35 +44,40 @@ public class CriptografiaEmRepousoService {
     }
 
     public String criptografar(String textoPuro) {
+        return Base64.getEncoder().encodeToString(criptografarBytes(textoPuro.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    public String descriptografar(String textoCriptografado) {
+        return new String(descriptografarBytes(Base64.getDecoder().decode(textoCriptografado)), StandardCharsets.UTF_8);
+    }
+
+    /** Variante para dados binarios (ex.: arquivo .p12) - mesmo formato, sem passar por texto/UTF-8 no meio. */
+    public byte[] criptografarBytes(byte[] dadoPuro) {
         try {
             byte[] iv = new byte[TAMANHO_IV_BYTES];
             secureRandom.nextBytes(iv);
 
             Cipher cipher = Cipher.getInstance(ALGORITMO);
             cipher.init(Cipher.ENCRYPT_MODE, chave, new GCMParameterSpec(TAMANHO_TAG_BITS, iv));
-            byte[] ciphertext = cipher.doFinal(textoPuro.getBytes(StandardCharsets.UTF_8));
+            byte[] ciphertext = cipher.doFinal(dadoPuro);
 
             byte[] saida = new byte[iv.length + ciphertext.length];
             System.arraycopy(iv, 0, saida, 0, iv.length);
             System.arraycopy(ciphertext, 0, saida, iv.length, ciphertext.length);
-
-            return Base64.getEncoder().encodeToString(saida);
+            return saida;
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao criptografar dado sensivel", e);
         }
     }
 
-    public String descriptografar(String textoCriptografado) {
+    public byte[] descriptografarBytes(byte[] dadoCriptografado) {
         try {
-            byte[] entrada = Base64.getDecoder().decode(textoCriptografado);
             byte[] iv = new byte[TAMANHO_IV_BYTES];
-            System.arraycopy(entrada, 0, iv, 0, TAMANHO_IV_BYTES);
+            System.arraycopy(dadoCriptografado, 0, iv, 0, TAMANHO_IV_BYTES);
 
             Cipher cipher = Cipher.getInstance(ALGORITMO);
             cipher.init(Cipher.DECRYPT_MODE, chave, new GCMParameterSpec(TAMANHO_TAG_BITS, iv));
-            byte[] textoPuro = cipher.doFinal(entrada, TAMANHO_IV_BYTES, entrada.length - TAMANHO_IV_BYTES);
-
-            return new String(textoPuro, StandardCharsets.UTF_8);
+            return cipher.doFinal(dadoCriptografado, TAMANHO_IV_BYTES, dadoCriptografado.length - TAMANHO_IV_BYTES);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao descriptografar dado sensivel - chave incorreta ou dado corrompido", e);
         }

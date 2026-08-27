@@ -2,7 +2,7 @@ package com.fiscaladapter.api.nfe;
 
 import com.fiscaladapter.api.idempotencia.IdempotenciaService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
-import com.fiscaladapter.certificado.CertificadoDigitalService;
+import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
 import com.fiscaladapter.sefaz.nfe.EmissaoNfeOrquestrador;
@@ -11,72 +11,56 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.util.Arrays;
 
 /**
- * Endpoint de recebimento de NFe. Nesta fase o certificado do emissor e
- * enviado junto na requisicao (multipart) porque o armazenamento seguro e
- * persistente de certificados ainda esta pendente (ver FIS-2/FIS-14); assim
- * que existir, este endpoint passa a buscar o certificado pelo emissor em
- * vez de recebe-lo a cada chamada.
+ * Endpoint de recebimento de NFe, no mesmo formato JSON da API ACBr (ver
+ * NfePedidoEmissaoRequest). O certificado do emissor e resolvido pelo CNPJ
+ * presente no proprio payload (infNFe.emit.CNPJ) a partir do que foi
+ * registrado via POST /api/v1/certificados (FIS-2) - o cliente nao precisa
+ * mais reenviar o .p12 a cada emissao.
  *
  * A geracao/assinatura/transmissao com retry e failover de contingencia
  * (FIS-7/FIS-37) fica em EmissaoNfeOrquestrador, nao aqui - o controller so
- * cuida de HTTP, autenticacao e idempotencia.
+ * cuida de HTTP, autenticacao, resolucao do certificado e idempotencia.
  */
 @RestController
 public class NfeController {
 
     private final NfeRequestMapper mapper;
-    private final CertificadoDigitalService certificadoDigitalService;
+    private final CertificadoEmissorService certificadoEmissorService;
     private final RegraNegocioService regraNegocioService;
     private final IdempotenciaService idempotenciaService;
     private final EmissaoNfeOrquestrador emissaoNfeOrquestrador;
 
-    public NfeController(NfeRequestMapper mapper, CertificadoDigitalService certificadoDigitalService,
+    public NfeController(NfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                           RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService,
                           EmissaoNfeOrquestrador emissaoNfeOrquestrador) {
         this.mapper = mapper;
-        this.certificadoDigitalService = certificadoDigitalService;
+        this.certificadoEmissorService = certificadoEmissorService;
         this.regraNegocioService = regraNegocioService;
         this.idempotenciaService = idempotenciaService;
         this.emissaoNfeOrquestrador = emissaoNfeOrquestrador;
     }
 
-    @PostMapping(value = "/api/v1/nfe", consumes = "multipart/form-data")
-    public ResponseEntity<NfeResponse> emitir(@RequestPart("documento") @Valid NfePedidoEmissaoRequest documento,
-                                               @RequestPart("certificado") MultipartFile certificado,
-                                               @RequestParam("senhaCertificado") String senhaCertificado,
+    @PostMapping("/api/v1/nfe")
+    public ResponseEntity<NfeResponse> emitir(@RequestBody @Valid NfePedidoEmissaoRequest documento,
                                                @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                Authentication authentication) {
         NfeResponse resposta = idempotenciaService.executar(authentication.getName(), idempotencyKey, () ->
-                processar(documento, certificado, senhaCertificado));
+                processar(documento));
 
         return ResponseEntity.ok(resposta);
     }
 
-    private NfeResponse processar(NfePedidoEmissaoRequest documento, MultipartFile certificado, String senhaCertificado) {
+    private NfeResponse processar(NfePedidoEmissaoRequest documento) {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
 
         regraNegocioService.validar(nfe);
 
-        char[] senha = senhaCertificado.toCharArray();
-        CertificadoCarregado certificadoCarregado;
-        try {
-            certificadoCarregado = certificadoDigitalService.carregar(certificado.getInputStream(), senha);
-        } catch (IOException e) {
-            throw new IllegalStateException("Falha ao ler o arquivo de certificado enviado", e);
-        } finally {
-            // A senha nunca deve permanecer na heap mais tempo que o necessario (FIS-14).
-            Arrays.fill(senha, '\0');
-        }
+        CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(nfe.emitente().cnpjSemMascara());
 
         ResultadoEmissaoNfe resultado = emissaoNfeOrquestrador.emitir(nfe, certificadoCarregado);
 

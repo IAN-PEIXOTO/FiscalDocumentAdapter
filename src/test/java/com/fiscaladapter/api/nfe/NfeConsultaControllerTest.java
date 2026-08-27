@@ -1,6 +1,7 @@
 package com.fiscaladapter.api.nfe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.CceResponse;
@@ -15,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Duration;
@@ -26,11 +26,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Certificado resolvido pelo CNPJ do emitente extraido da chave de acesso
+ * (FIS-2) - registrado uma vez em prepararCenario(), sem multipart por chamada.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 class NfeConsultaControllerTest {
@@ -46,6 +49,9 @@ class NfeConsultaControllerTest {
     @Autowired
     private ClienteApiService clienteApiService;
 
+    @Autowired
+    private CertificadoEmissorService certificadoEmissorService;
+
     @MockBean
     private NfeConsultaProtocoloClient consultaProtocoloClient;
 
@@ -59,10 +65,14 @@ class NfeConsultaControllerTest {
     private String clientSecret;
 
     @BeforeEach
-    void criarClienteDeTeste() {
+    void prepararCenario() throws Exception {
         ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste consulta");
         this.clientId = credenciais.clientId();
         this.clientSecret = credenciais.clientSecret();
+
+        byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", "senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))), Date.from(Instant.now().plus(Duration.ofDays(365))));
+        certificadoEmissorService.registrar(p12, "senha123".toCharArray());
     }
 
     @Test
@@ -71,13 +81,10 @@ class NfeConsultaControllerTest {
                 .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000001"));
 
         String accessToken = obterAccessToken();
-        MockMultipartFile certificado = new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", certificadoDeTeste());
 
-        mockMvc.perform(multipart("/api/v1/nfe/" + CHAVE_ACESSO + "/consulta")
-                        .file(certificado)
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/consulta")
                         .param("uf", "SP")
                         .param("ambiente", "HOMOLOGACAO")
-                        .param("senhaCertificado", "senha123")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.autorizada").value(true))
@@ -90,15 +97,12 @@ class NfeConsultaControllerTest {
                 .thenReturn(CancelamentoResponse.de("135", "Evento registrado e vinculado a NF-e"));
 
         String accessToken = obterAccessToken();
-        MockMultipartFile certificado = new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", certificadoDeTeste());
 
-        mockMvc.perform(multipart("/api/v1/nfe/" + CHAVE_ACESSO + "/cancelamento")
-                        .file(certificado)
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/cancelamento")
                         .param("uf", "SP")
                         .param("ambiente", "HOMOLOGACAO")
                         .param("numeroProtocolo", "135260000000001")
                         .param("justificativa", "Erro de digitacao no valor do produto")
-                        .param("senhaCertificado", "senha123")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cancelado").value(true));
@@ -110,15 +114,12 @@ class NfeConsultaControllerTest {
                 .thenReturn(CceResponse.de("135", "Evento registrado e vinculado a NF-e", "135260000000002"));
 
         String accessToken = obterAccessToken();
-        MockMultipartFile certificado = new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", certificadoDeTeste());
 
-        mockMvc.perform(multipart("/api/v1/nfe/" + CHAVE_ACESSO + "/cartaCorrecao")
-                        .file(certificado)
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/cartaCorrecao")
                         .param("uf", "SP")
                         .param("ambiente", "HOMOLOGACAO")
                         .param("numeroSequencial", "1")
                         .param("textoCorrecao", "Correcao do endereco de entrega, sem alteracao de valores")
-                        .param("senhaCertificado", "senha123")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.registrada").value(true))
@@ -127,13 +128,9 @@ class NfeConsultaControllerTest {
 
     @Test
     void deveRejeitarConsultaSemToken() throws Exception {
-        MockMultipartFile certificado = new MockMultipartFile("certificado", "c.p12", "application/x-pkcs12", new byte[]{1, 2, 3});
-
-        mockMvc.perform(multipart("/api/v1/nfe/" + CHAVE_ACESSO + "/consulta")
-                        .file(certificado)
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/consulta")
                         .param("uf", "SP")
-                        .param("ambiente", "HOMOLOGACAO")
-                        .param("senhaCertificado", "qualquer"))
+                        .param("ambiente", "HOMOLOGACAO"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -146,10 +143,5 @@ class NfeConsultaControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         return objectMapper.readTree(resposta).get("access_token").asText();
-    }
-
-    private byte[] certificadoDeTeste() throws Exception {
-        return TestCertificadoFactory.gerarP12("12345678000199", "senha123".toCharArray(),
-                Date.from(Instant.now().minus(Duration.ofDays(1))), Date.from(Instant.now().plus(Duration.ofDays(365))));
     }
 }

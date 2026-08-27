@@ -31,6 +31,7 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
+                        .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))

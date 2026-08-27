@@ -46,6 +46,11 @@ public class ChaveAcessoService {
         return corpo + calcularDigitoVerificador(corpo);
     }
 
+    /** Extrai o CNPJ do emitente embutido na chave de acesso (posicoes 6-19, ver layout na Javadoc da classe). */
+    public String cnpjEmitente(String chaveAcesso) {
+        return chaveAcesso.substring(6, 20);
+    }
+
     public String modeloPara(TipoDocumentoFiscal tipo) {
         return switch (tipo) {
             case NFE -> "55";
