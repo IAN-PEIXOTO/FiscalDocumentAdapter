@@ -23,9 +23,19 @@ class SefazEndpointRegistryTest {
     }
 
     @Test
-    void deveResolverTodosOsCincoServicosParaHomologacao() {
+    void deveResolverTodosOsServicosParaHomologacao() {
         for (TipoServicoSefaz servico : TipoServicoSefaz.values()) {
             assertThat(registry.obterUrl("RJ", TipoAmbiente.HOMOLOGACAO, servico)).startsWith("https://");
+        }
+    }
+
+    @Test
+    void deveResolverInutilizacaoParaTodasAs27UfsNosDoisAmbientes() {
+        String[] ufs = {"AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB",
+                "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"};
+        for (String uf : ufs) {
+            assertThat(registry.obterUrl(uf, TipoAmbiente.PRODUCAO, TipoServicoSefaz.INUTILIZACAO)).startsWith("https://");
+            assertThat(registry.obterUrl(uf, TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.INUTILIZACAO)).startsWith("https://");
         }
     }
 

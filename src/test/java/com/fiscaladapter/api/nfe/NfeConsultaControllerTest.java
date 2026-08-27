@@ -6,9 +6,11 @@ import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.CceResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
+import com.fiscaladapter.sefaz.nfe.InutilizacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeCancelamentoClient;
 import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
+import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import java.util.Date;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -60,6 +63,9 @@ class NfeConsultaControllerTest {
 
     @MockBean
     private NfeCceClient cceClient;
+
+    @MockBean
+    private NfeInutilizacaoClient inutilizacaoClient;
 
     private String clientId;
     private String clientSecret;
@@ -124,6 +130,27 @@ class NfeConsultaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.registrada").value(true))
                 .andExpect(jsonPath("$.numeroProtocolo").value("135260000000002"));
+    }
+
+    @Test
+    void deveInutilizarFaixaDeNumeracaoERetornarConfirmacao() throws Exception {
+        when(inutilizacaoClient.inutilizar(any(), any(), anyInt(), anyLong(), anyLong(), any(), any(), any()))
+                .thenReturn(InutilizacaoResponse.de("102", "Inutilizacao de numero homologada", "135260000000003"));
+
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe/inutilizacao")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("cnpjEmitente", "12345678000199")
+                        .param("serie", "1")
+                        .param("numeroInicial", "100")
+                        .param("numeroFinal", "110")
+                        .param("justificativa", "Numeracao pulada por erro de sistema antes da transmissao")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inutilizada").value(true))
+                .andExpect(jsonPath("$.numeroProtocolo").value("135260000000003"));
     }
 
     @Test
