@@ -1,5 +1,6 @@
 package com.fiscaladapter.config;
 
+import com.fiscaladapter.observabilidade.MdcRequisicaoFilter;
 import com.fiscaladapter.seguranca.RateLimitFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,9 +26,10 @@ import java.time.Duration;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, RateLimitFilter rateLimitFilter) throws Exception {
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, RateLimitFilter rateLimitFilter,
+                                                        MdcRequisicaoFilter mdcRequisicaoFilter) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health").permitAll()
+                        .requestMatchers("/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable())
@@ -40,7 +42,8 @@ public class SecurityConfig {
                         .frameOptions(frameOptions -> frameOptions.deny())
                         .cacheControl(cacheControl -> {})
                         .addHeaderWriter(new StaticHeadersWriter("X-Permitted-Cross-Domain-Policies", "none")))
-                .addFilterBefore(rateLimitFilter, AuthorizationFilter.class);
+                .addFilterBefore(rateLimitFilter, AuthorizationFilter.class)
+                .addFilterBefore(mdcRequisicaoFilter, AuthorizationFilter.class);
         return http.build();
     }
 }

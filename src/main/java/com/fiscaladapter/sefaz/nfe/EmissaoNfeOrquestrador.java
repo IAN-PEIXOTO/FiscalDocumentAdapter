@@ -7,7 +7,12 @@ import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
+import com.fiscaladapter.observabilidade.MdcChaveAcesso;
+import com.fiscaladapter.observabilidade.NfeEmissaoMetrics;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
+import io.micrometer.core.instrument.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,6 +32,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class EmissaoNfeOrquestrador {
 
+    private static final Logger log = LoggerFactory.getLogger(EmissaoNfeOrquestrador.class);
+
     private static final int TENTATIVAS_ENDPOINT_NORMAL = 2;
     private static final long ESPERA_ENTRE_TENTATIVAS_MS = 2000;
 
@@ -35,49 +42,64 @@ public class EmissaoNfeOrquestrador {
     private final AssinaturaXmlService assinaturaXmlService;
     private final NfeXsdValidator xsdValidator;
     private final NfeAutorizacaoClient autorizacaoClient;
+    private final NfeEmissaoMetrics metrics;
 
     public EmissaoNfeOrquestrador(ChaveAcessoService chaveAcessoService, NfeXmlGenerator xmlGenerator,
                                    AssinaturaXmlService assinaturaXmlService, NfeXsdValidator xsdValidator,
-                                   NfeAutorizacaoClient autorizacaoClient) {
+                                   NfeAutorizacaoClient autorizacaoClient, NfeEmissaoMetrics metrics) {
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
         this.assinaturaXmlService = assinaturaXmlService;
         this.xsdValidator = xsdValidator;
         this.autorizacaoClient = autorizacaoClient;
+        this.metrics = metrics;
     }
 
     public ResultadoEmissaoNfe emitir(NotaFiscalEletronica nfe, CertificadoCarregado certificado) {
         String uf = nfe.identificacao().uf();
+        Timer.Sample cronometro = metrics.iniciarCronometro();
 
         DocumentoPreparado normal = prepararDocumento(nfe, certificado, "1");
 
-        SefazComunicacaoException ultimaFalha = null;
-        for (int tentativa = 1; tentativa <= TENTATIVAS_ENDPOINT_NORMAL; tentativa++) {
-            try {
-                AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
-                        normal.xmlAssinado(), uf, nfe.identificacao().ambiente(), certificado);
-                return new ResultadoEmissaoNfe(normal.chaveAcesso(), normal.xmlAssinado(), autorizacao, false);
-            } catch (SefazComunicacaoException e) {
-                ultimaFalha = e;
-                if (tentativa < TENTATIVAS_ENDPOINT_NORMAL) {
-                    aguardar();
+        try (MdcChaveAcesso ignorado = MdcChaveAcesso.abrir(normal.chaveAcesso())) {
+            log.info("Iniciando emissao de NFe para UF {}", uf);
+
+            SefazComunicacaoException ultimaFalha = null;
+            for (int tentativa = 1; tentativa <= TENTATIVAS_ENDPOINT_NORMAL; tentativa++) {
+                try {
+                    AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
+                            normal.xmlAssinado(), uf, nfe.identificacao().ambiente(), certificado);
+                    return finalizarComSucesso(normal, autorizacao, false, cronometro);
+                } catch (SefazComunicacaoException e) {
+                    ultimaFalha = e;
+                    log.warn("Falha de comunicacao com a SEFAZ da UF {} na tentativa {}/{}: {}",
+                            uf, tentativa, TENTATIVAS_ENDPOINT_NORMAL, e.getMessage());
+                    if (tentativa < TENTATIVAS_ENDPOINT_NORMAL) {
+                        aguardar();
+                    }
                 }
             }
-        }
 
-        return tentarContingencia(nfe, certificado, uf, ultimaFalha);
+            return tentarContingencia(nfe, certificado, uf, ultimaFalha, cronometro);
+        }
     }
 
     private ResultadoEmissaoNfe tentarContingencia(NotaFiscalEletronica nfe, CertificadoCarregado certificado,
-                                                     String uf, SefazComunicacaoException falhaOriginal) {
+                                                     String uf, SefazComunicacaoException falhaOriginal,
+                                                     Timer.Sample cronometro) {
         ServicoContingenciaSvc svc = MapeamentoContingenciaSvc.svcPara(uf);
+        log.warn("Endpoint normal da UF {} esgotou as tentativas - acionando contingencia {}", uf, svc.chaveEndpoint());
         DocumentoPreparado contingencia = prepararDocumento(nfe, certificado, svc.tpEmis());
 
-        try {
+        try (MdcChaveAcesso ignorado = MdcChaveAcesso.abrir(contingencia.chaveAcesso())) {
             AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
                     contingencia.xmlAssinado(), uf, svc.chaveEndpoint(), nfe.identificacao().ambiente(), certificado);
-            return new ResultadoEmissaoNfe(contingencia.chaveAcesso(), contingencia.xmlAssinado(), autorizacao, true);
+            return finalizarComSucesso(contingencia, autorizacao, true, cronometro);
         } catch (SefazComunicacaoException falhaContingencia) {
+            metrics.registrarErroComunicacao(cronometro);
+            log.error("Endpoint normal da UF {} e a contingencia {} falharam. Ultimo erro: {}",
+                    uf, svc.chaveEndpoint(), falhaContingencia.getMessage());
+
             SefazComunicacaoException falhaFinal = new SefazComunicacaoException(
                     "Endpoint normal da UF " + uf + " e a contingencia " + svc.chaveEndpoint()
                             + " falharam. Ultimo erro: " + falhaContingencia.getMessage(), falhaContingencia);
@@ -86,6 +108,20 @@ public class EmissaoNfeOrquestrador {
             }
             throw falhaFinal;
         }
+    }
+
+    private ResultadoEmissaoNfe finalizarComSucesso(DocumentoPreparado documento, AutorizacaoResponse autorizacao,
+                                                      boolean viaContingencia, Timer.Sample cronometro) {
+        if (autorizacao.autorizada()) {
+            metrics.registrarAutorizada(cronometro, viaContingencia);
+            log.info("NFe autorizada pela SEFAZ (protocolo {}, contingencia={})",
+                    autorizacao.numeroProtocolo(), viaContingencia);
+        } else {
+            metrics.registrarRejeitada(cronometro, viaContingencia, autorizacao.codigoStatus());
+            log.warn("NFe rejeitada pela SEFAZ - cStat {} ({}), contingencia={}",
+                    autorizacao.codigoStatus(), autorizacao.motivo(), viaContingencia);
+        }
+        return new ResultadoEmissaoNfe(documento.chaveAcesso(), documento.xmlAssinado(), autorizacao, viaContingencia);
     }
 
     private DocumentoPreparado prepararDocumento(NotaFiscalEletronica nfe, CertificadoCarregado certificado, String tpEmis) {

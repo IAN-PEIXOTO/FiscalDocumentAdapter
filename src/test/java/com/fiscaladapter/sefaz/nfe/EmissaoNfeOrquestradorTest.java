@@ -10,7 +10,9 @@ import com.fiscaladapter.documento.nfe.NfeXsdValidator;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronicaTestFixture;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
+import com.fiscaladapter.observabilidade.NfeEmissaoMetrics;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -38,9 +40,10 @@ class EmissaoNfeOrquestradorTest {
     private final AssinaturaXmlService assinaturaXmlService = new AssinaturaXmlService();
     private final NfeXsdValidator xsdValidator = new NfeXsdValidator();
     private final NfeAutorizacaoClient autorizacaoClient = Mockito.mock(NfeAutorizacaoClient.class);
+    private final NfeEmissaoMetrics metrics = new NfeEmissaoMetrics(new SimpleMeterRegistry());
 
     private final EmissaoNfeOrquestrador orquestrador = new EmissaoNfeOrquestrador(
-            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient);
+            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient, metrics);
 
     @Test
     void deveAutorizarNaPrimeiraTentativaSemAcionarContingencia() throws Exception {

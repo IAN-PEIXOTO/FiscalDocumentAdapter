@@ -6,6 +6,8 @@ import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,8 +17,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 
+/**
+ * Alem de traduzir excecoes em respostas HTTP, loga as que representam falha
+ * de infraestrutura ou bug (comunicacao com SEFAZ, erro nao mapeado) - FIS-11.
+ * Excecoes que sao apenas "requisicao invalida do cliente" (validacao, regra
+ * de negocio, certificado) nao precisam de log de erro: nao indicam problema
+ * do nosso lado.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErroResposta> tratar(MethodArgumentNotValidException e) {
@@ -70,7 +81,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SefazComunicacaoException.class)
     public ResponseEntity<ErroResposta> tratar(SefazComunicacaoException e) {
+        log.error("Falha de comunicacao com a SEFAZ (endpoint normal e contingencia esgotados): {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(new ErroResposta("Falha de comunicacao com a SEFAZ: " + e.getMessage()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErroResposta> tratar(Exception e) {
+        log.error("Erro nao mapeado ao processar requisicao", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErroResposta("Erro interno ao processar a requisicao"));
     }
 }
