@@ -9,8 +9,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    open-in-view: false
   flyway:
-    enabled: false
+    enabled: true
 
 server:
   port: 8080
