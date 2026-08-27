@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: fiscal-document-adapter
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:h2:mem:fiscaladapter
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: false
+
+server:
+  port: 8080
+
+fiscaladapter:
+  ambiente: dev

@@ -1,0 +1,10 @@
+target/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.env
+*.p12
+*.pfx
+.mvn/wrapper/maven-wrapper.jar

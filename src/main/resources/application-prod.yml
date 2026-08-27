@@ -1,0 +1,4 @@
+fiscaladapter:
+  ambiente: prod
+  sefaz:
+    tipo-ambiente: producao

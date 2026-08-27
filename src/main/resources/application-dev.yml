@@ -1,0 +1,4 @@
+fiscaladapter:
+  ambiente: dev
+  sefaz:
+    tipo-ambiente: homologacao
