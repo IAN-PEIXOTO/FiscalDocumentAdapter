@@ -16,6 +16,7 @@ import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
 import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
 import com.fiscaladapter.sefaz.nfe.TipoManifestacaoDestinatario;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Endpoints pos-emissao de NFe: consulta de situacao, cancelamento e carta de
  * correcao (FIS-51/FIS-55). O certificado e resolvido pelo CNPJ do emitente,
  * extraido da propria chave de acesso (FIS-2) - nao precisa mais ser
- * reenviado a cada chamada.
+ * reenviado a cada chamada. Multi-tenant (FIS-10): CertificadoEmissorService
+ * so libera o certificado se o client_id autenticado for o dono do CNPJ.
  */
 @RestController
 public class NfeConsultaController {
@@ -57,8 +59,9 @@ public class NfeConsultaController {
     @PostMapping("/api/v1/nfe/{chaveAcesso}/consulta")
     public ResponseEntity<ConsultaNfeResponse> consultar(@PathVariable String chaveAcesso,
                                                            @RequestParam String uf,
-                                                           @RequestParam TipoAmbiente ambiente) {
-        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso);
+                                                           @RequestParam TipoAmbiente ambiente,
+                                                           Authentication authentication) {
+        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificadoCarregado);
 
@@ -71,8 +74,9 @@ public class NfeConsultaController {
                                                               @RequestParam String uf,
                                                               @RequestParam TipoAmbiente ambiente,
                                                               @RequestParam String numeroProtocolo,
-                                                              @RequestParam String justificativa) {
-        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso);
+                                                              @RequestParam String justificativa,
+                                                              Authentication authentication) {
+        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         CancelamentoResponse resposta = cancelamentoClient.cancelar(
                 chaveAcesso, numeroProtocolo, justificativa, uf, ambiente, certificadoCarregado);
@@ -86,8 +90,9 @@ public class NfeConsultaController {
                                                      @RequestParam String uf,
                                                      @RequestParam TipoAmbiente ambiente,
                                                      @RequestParam int numeroSequencial,
-                                                     @RequestParam String textoCorrecao) {
-        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso);
+                                                     @RequestParam String textoCorrecao,
+                                                     Authentication authentication) {
+        CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         CceResponse resposta = cceClient.corrigir(
                 chaveAcesso, numeroSequencial, textoCorrecao, uf, ambiente, certificadoCarregado);
@@ -108,8 +113,10 @@ public class NfeConsultaController {
                                                                  @RequestParam int serie,
                                                                  @RequestParam long numeroInicial,
                                                                  @RequestParam long numeroFinal,
-                                                                 @RequestParam String justificativa) {
-        CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(cnpjEmitente.replaceAll("\\D", ""));
+                                                                 @RequestParam String justificativa,
+                                                                 Authentication authentication) {
+        CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(
+                authentication.getName(), cnpjEmitente.replaceAll("\\D", ""));
 
         InutilizacaoResponse resposta = inutilizacaoClient.inutilizar(
                 cnpjEmitente, uf, serie, numeroInicial, numeroFinal, justificativa, ambiente, certificadoCarregado);
@@ -129,9 +136,10 @@ public class NfeConsultaController {
                                                                 @RequestParam TipoAmbiente ambiente,
                                                                 @RequestParam String cnpjManifestante,
                                                                 @RequestParam TipoManifestacaoDestinatario tipo,
-                                                                @RequestParam(required = false) String justificativa) {
-        CertificadoCarregado certificadoCarregado =
-                certificadoEmissorService.carregar(cnpjManifestante.replaceAll("\\D", ""));
+                                                                @RequestParam(required = false) String justificativa,
+                                                                Authentication authentication) {
+        CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(
+                authentication.getName(), cnpjManifestante.replaceAll("\\D", ""));
 
         ManifestacaoResponse resposta = manifestacaoDestinatarioClient.manifestar(
                 chaveAcesso, tipo, justificativa, ambiente, certificadoCarregado);
@@ -140,7 +148,7 @@ public class NfeConsultaController {
                 chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
     }
 
-    private CertificadoCarregado carregarCertificado(String chaveAcesso) {
-        return certificadoEmissorService.carregar(chaveAcessoService.cnpjEmitente(chaveAcesso));
+    private CertificadoCarregado carregarCertificado(String chaveAcesso, Authentication authentication) {
+        return certificadoEmissorService.carregar(authentication.getName(), chaveAcessoService.cnpjEmitente(chaveAcesso));
     }
 }

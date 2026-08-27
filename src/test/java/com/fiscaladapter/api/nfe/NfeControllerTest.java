@@ -6,8 +6,10 @@ import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NfeControllerTest {
 
     private static final String CNPJ_EMISSOR = "12345678000199";
@@ -61,8 +64,14 @@ class NfeControllerTest {
     private String clientId;
     private String clientSecret;
 
-    @BeforeEach
-    void prepararCenario() throws Exception {
+    /**
+     * Roda uma unica vez por classe (nao por teste): registrar o mesmo CNPJ de
+     * novo em cada teste, sob um client_id diferente, colidiria com o dono ja
+     * fixado no primeiro registro (FIS-10 - CNPJ pertence a exatamente um
+     * client_id).
+     */
+    @BeforeAll
+    void prepararClienteECertificado() throws Exception {
         ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste");
         this.clientId = credenciais.clientId();
         this.clientSecret = credenciais.clientSecret();
@@ -70,8 +79,11 @@ class NfeControllerTest {
         byte[] p12 = TestCertificadoFactory.gerarP12(CNPJ_EMISSOR, "senha123".toCharArray(),
                 Date.from(Instant.now().minus(Duration.ofDays(1))),
                 Date.from(Instant.now().plus(Duration.ofDays(365))));
-        certificadoEmissorService.registrar(p12, "senha123".toCharArray());
+        certificadoEmissorService.registrar(clientId, p12, "senha123".toCharArray());
+    }
 
+    @BeforeEach
+    void prepararMocks() {
         // a comunicacao real com a SEFAZ e testada separadamente (com.fiscaladapter.sefaz.nfe.*Test);
         // aqui simulamos uma autorizacao bem-sucedida para testar so a orquestracao do controller
         when(autorizacaoClient.autorizar(any(), any(), any(), any()))
@@ -191,6 +203,21 @@ class NfeControllerTest {
     }
 
     @Test
+    void deveRetornarForbiddenQuandoOutroClienteTentaEmitirParaCnpjDeOutroTenant() throws Exception {
+        // CNPJ_EMISSOR ja foi registrado por "clientId" no @BeforeEach - um segundo
+        // cliente nao pode emitir em nome dele so por conhecer o CNPJ (FIS-10)
+        ClienteApiService.CredenciaisGeradas outroCliente = clienteApiService.cadastrar("Outro tenant");
+        String outroAccessToken = obterAccessToken(outroCliente.clientId(), outroCliente.clientSecret());
+
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .header("Authorization", "Bearer " + outroAccessToken)
+                        .header("Idempotency-Key", "chave-outro-tenant"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void deveRetornarNotFoundQuandoEmissorNaoTemCertificadoRegistrado() throws Exception {
         String accessToken = obterAccessToken();
 
@@ -211,6 +238,10 @@ class NfeControllerTest {
     }
 
     private String obterAccessToken() throws Exception {
+        return obterAccessToken(clientId, clientSecret);
+    }
+
+    private String obterAccessToken(String clientId, String clientSecret) throws Exception {
         String resposta = mockMvc.perform(post("/oauth2/token")
                         .with(httpBasic(clientId, clientSecret))
                         .param("grant_type", "client_credentials")

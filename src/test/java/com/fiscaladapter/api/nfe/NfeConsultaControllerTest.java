@@ -14,8 +14,9 @@ import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
 import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -41,9 +42,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NfeConsultaControllerTest {
 
-    private static final String CHAVE_ACESSO = "35260012345678000199550010000000421000000010";
+    // CNPJ (98765432000188) precisa ser diferente do usado em NfeControllerTest: os testes
+    // rodam contra o mesmo banco H2 compartilhado entre classes, e cada CNPJ so pode
+    // pertencer a um client_id (FIS-10).
+    private static final String CNPJ_EMISSOR = "98765432000188";
+    private static final String CHAVE_ACESSO = "35260098765432000188550010000000421000000010";
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,15 +81,16 @@ class NfeConsultaControllerTest {
     private String clientId;
     private String clientSecret;
 
-    @BeforeEach
+    /** Roda uma unica vez por classe - ver mesma nota em NfeControllerTest (FIS-10). */
+    @BeforeAll
     void prepararCenario() throws Exception {
         ClienteApiService.CredenciaisGeradas credenciais = clienteApiService.cadastrar("Cliente de teste consulta");
         this.clientId = credenciais.clientId();
         this.clientSecret = credenciais.clientSecret();
 
-        byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", "senha123".toCharArray(),
+        byte[] p12 = TestCertificadoFactory.gerarP12(CNPJ_EMISSOR, "senha123".toCharArray(),
                 Date.from(Instant.now().minus(Duration.ofDays(1))), Date.from(Instant.now().plus(Duration.ofDays(365))));
-        certificadoEmissorService.registrar(p12, "senha123".toCharArray());
+        certificadoEmissorService.registrar(clientId, p12, "senha123".toCharArray());
     }
 
     @Test
@@ -147,7 +154,7 @@ class NfeConsultaControllerTest {
         mockMvc.perform(post("/api/v1/nfe/inutilizacao")
                         .param("uf", "SP")
                         .param("ambiente", "HOMOLOGACAO")
-                        .param("cnpjEmitente", "12345678000199")
+                        .param("cnpjEmitente", CNPJ_EMISSOR)
                         .param("serie", "1")
                         .param("numeroInicial", "100")
                         .param("numeroFinal", "110")
@@ -167,7 +174,7 @@ class NfeConsultaControllerTest {
 
         mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/manifestacao")
                         .param("ambiente", "HOMOLOGACAO")
-                        .param("cnpjManifestante", "12345678000199")
+                        .param("cnpjManifestante", CNPJ_EMISSOR)
                         .param("tipo", "CIENCIA_DA_OPERACAO")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())

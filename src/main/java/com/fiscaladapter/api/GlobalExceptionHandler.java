@@ -7,6 +7,7 @@ import com.fiscaladapter.certificado.CertificadoNaoEncontradoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
+import com.fiscaladapter.seguranca.EmissorNaoAutorizadoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CertificadoNaoEncontradoException.class)
     public ResponseEntity<ErroResposta> tratar(CertificadoNaoEncontradoException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(EmissorNaoAutorizadoException.class)
+    public ResponseEntity<ErroResposta> tratar(EmissorNaoAutorizadoException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErroResposta(e.getMessage()));
     }
 
     @ExceptionHandler(AssinaturaDigitalException.class)

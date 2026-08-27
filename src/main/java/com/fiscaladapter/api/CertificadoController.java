@@ -3,6 +3,7 @@ package com.fiscaladapter.api;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.CertificadoInfo;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +20,10 @@ import java.util.Arrays;
  * as emissoes de NFe (POST /api/v1/nfe) resolvem o certificado automaticamente
  * pelo CNPJ do emissor no proprio payload, sem precisar reenviar o .p12 a
  * cada chamada.
+ *
+ * Multi-tenant (FIS-10): o CNPJ fica vinculado ao client_id que o registrou
+ * primeiro - outro client_id nao consegue reenviar/remover o certificado
+ * desse CNPJ, mesmo conhecendo o numero (ver AutorizacaoEmissorService).
  */
 @RestController
 public class CertificadoController {
@@ -31,11 +36,12 @@ public class CertificadoController {
 
     @PostMapping(value = "/api/v1/certificados", consumes = "multipart/form-data")
     public ResponseEntity<CertificadoRegistradoResponse> registrar(@RequestPart("certificado") MultipartFile certificado,
-                                                                     @RequestParam("senhaCertificado") String senhaCertificado) {
+                                                                     @RequestParam("senhaCertificado") String senhaCertificado,
+                                                                     Authentication authentication) {
         char[] senha = senhaCertificado.toCharArray();
         try {
             byte[] arquivoP12 = certificado.getBytes();
-            CertificadoInfo info = certificadoEmissorService.registrar(arquivoP12, senha);
+            CertificadoInfo info = certificadoEmissorService.registrar(authentication.getName(), arquivoP12, senha);
             return ResponseEntity.ok(new CertificadoRegistradoResponse(
                     info.cnpj(), info.subjectDn(), info.validoDe(), info.validoAte()));
         } catch (IOException e) {
@@ -46,8 +52,8 @@ public class CertificadoController {
     }
 
     @DeleteMapping("/api/v1/certificados/{cnpj}")
-    public ResponseEntity<Void> remover(@PathVariable String cnpj) {
-        certificadoEmissorService.remover(cnpj);
+    public ResponseEntity<Void> remover(@PathVariable String cnpj, Authentication authentication) {
+        certificadoEmissorService.remover(authentication.getName(), cnpj);
         return ResponseEntity.noContent().build();
     }
 }

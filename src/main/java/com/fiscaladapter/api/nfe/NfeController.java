@@ -58,18 +58,20 @@ public class NfeController {
     public ResponseEntity<NfeResponse> emitir(@RequestBody @Valid NfePedidoEmissaoRequest documento,
                                                @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                Authentication authentication) {
-        NfeResponse resposta = idempotenciaService.executar(authentication.getName(), idempotencyKey, () ->
-                processar(documento));
+        String clientId = authentication.getName();
+        NfeResponse resposta = idempotenciaService.executar(clientId, idempotencyKey, () ->
+                processar(documento, clientId));
 
         return ResponseEntity.ok(resposta);
     }
 
-    private NfeResponse processar(NfePedidoEmissaoRequest documento) {
+    private NfeResponse processar(NfePedidoEmissaoRequest documento, String clientId) {
         NotaFiscalEletronica nfe = mapper.paraDominio(documento);
 
         regraNegocioService.validar(nfe);
 
-        CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(nfe.emitente().cnpjSemMascara());
+        CertificadoCarregado certificadoCarregado =
+                certificadoEmissorService.carregar(clientId, nfe.emitente().cnpjSemMascara());
 
         ResultadoEmissaoNfe resultado = emissaoNfeOrquestrador.emitir(nfe, certificadoCarregado);
 
