@@ -38,17 +38,32 @@ public class NfeAutorizacaoClient {
 
     public AutorizacaoResponse autorizar(String xmlNfeAssinado, String uf, TipoAmbiente ambiente,
                                           CertificadoCarregado certificado) {
-        return autorizar(xmlNfeAssinado, uf, ambiente, httpClientFactory.criar(certificado));
+        return autorizar(xmlNfeAssinado, uf, uf, ambiente, httpClientFactory.criar(certificado));
     }
 
-    AutorizacaoResponse autorizar(String xmlNfeAssinado, String uf, TipoAmbiente ambiente, HttpClient httpClient) {
-        String url = endpointRegistry.obterUrl(uf, ambiente, TipoServicoSefaz.AUTORIZACAO);
-        return autorizar(url, xmlNfeAssinado, uf, ambiente, httpClient);
+    /**
+     * Em contingencia, o envio vai para o endpoint da SVC (chaveEndpoint =
+     * "SVC-AN"/"SVC-RS"), mas o cUF do envelope continua sendo o da UF do
+     * emitente - por isso os dois parametros separados (ver FIS-37).
+     */
+    public AutorizacaoResponse autorizar(String xmlNfeAssinado, String ufEmitente, String chaveEndpoint,
+                                          TipoAmbiente ambiente, CertificadoCarregado certificado) {
+        return autorizar(xmlNfeAssinado, ufEmitente, chaveEndpoint, ambiente, httpClientFactory.criar(certificado));
+    }
+
+    AutorizacaoResponse autorizar(String xmlNfeAssinado, String ufEmitente, TipoAmbiente ambiente, HttpClient httpClient) {
+        return autorizar(xmlNfeAssinado, ufEmitente, ufEmitente, ambiente, httpClient);
+    }
+
+    AutorizacaoResponse autorizar(String xmlNfeAssinado, String ufEmitente, String chaveEndpoint,
+                                   TipoAmbiente ambiente, HttpClient httpClient) {
+        String url = endpointRegistry.obterUrl(chaveEndpoint, ambiente, TipoServicoSefaz.AUTORIZACAO);
+        return autorizarNoEndpoint(url, xmlNfeAssinado, ufEmitente, ambiente, httpClient);
     }
 
     /** Visivel para testes: permite apontar para um servidor de teste local em vez do endpoint real da SEFAZ. */
-    AutorizacaoResponse autorizar(String url, String xmlNfeAssinado, String uf, TipoAmbiente ambiente, HttpClient httpClient) {
-        String cUF = CodigoUfSefaz.codigo(uf);
+    AutorizacaoResponse autorizarNoEndpoint(String url, String xmlNfeAssinado, String ufEmitente, TipoAmbiente ambiente, HttpClient httpClient) {
+        String cUF = CodigoUfSefaz.codigo(ufEmitente);
         String idLote = String.valueOf(System.nanoTime() % 1_000_000_000L);
 
         String enviNFe = "<enviNFe versao=\"4.00\" xmlns=\"http://www.portalfiscal.inf.br/nfe\">"

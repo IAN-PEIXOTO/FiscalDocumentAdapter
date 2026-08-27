@@ -91,7 +91,7 @@ public class NfeXmlGenerator {
         tag(xml, "idDest", nfe.destinatario().endereco().uf().equals(ide.uf()) ? "1" : "2");
         tag(xml, "cMunFG", ide.codigoMunicipioFatoGerador());
         tag(xml, "tpImp", "1"); // DANFE retrato
-        tag(xml, "tpEmis", "1"); // emissao normal
+        tag(xml, "tpEmis", chaveAcesso.substring(34, 35)); // extraido da chave, nao pode divergir dela (ver FIS-37)
         tag(xml, "cDV", chaveAcesso.substring(43));
         tag(xml, "tpAmb", String.valueOf(ide.ambiente().codigo()));
         tag(xml, "finNFe", String.valueOf(ide.finalidadeEmissao()));

@@ -44,7 +44,7 @@ class NfeAutorizacaoClientTest {
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
             NfeAutorizacaoClient client = new NfeAutorizacaoClient(null, null);
-            AutorizacaoResponse resposta = client.autorizar(servidor.url(), xmlAssinado, "SP", TipoAmbiente.HOMOLOGACAO, httpClient);
+            AutorizacaoResponse resposta = client.autorizarNoEndpoint(servidor.url(), xmlAssinado, "SP", TipoAmbiente.HOMOLOGACAO, httpClient);
 
             assertThat(resposta.autorizada()).isTrue();
             assertThat(resposta.numeroProtocolo()).isEqualTo("135260000000001");

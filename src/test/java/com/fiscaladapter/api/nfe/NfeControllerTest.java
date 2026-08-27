@@ -119,8 +119,12 @@ class NfeControllerTest {
 
     @Test
     void deveRetornarBadGatewayQuandoFalhaComunicacaoComSefaz() throws Exception {
+        // endpoint normal e a contingencia (SVC-AN, mapeada para SP) precisam falhar os dois
+        // para o erro se propagar - ver EmissaoNfeOrquestrador (FIS-7/FIS-37)
         when(autorizacaoClient.autorizar(any(), any(), any(), any()))
                 .thenThrow(new com.fiscaladapter.sefaz.SefazComunicacaoException("timeout de conexao"));
+        when(autorizacaoClient.autorizar(any(), any(), any(), any(), any()))
+                .thenThrow(new com.fiscaladapter.sefaz.SefazComunicacaoException("timeout na contingencia"));
 
         String accessToken = obterAccessToken();
         byte[] p12 = TestCertificadoFactory.gerarP12(
