@@ -64,3 +64,36 @@ padrao totalmente distinto como GINFES/DSF) precisa de um novo
 `NfseXmlGenerator` mapeado no `nfse-municipios.properties` - a comunicacao
 com os webservices municipais propriamente dita (que variam por prefeitura)
 fica para o FIS-21.
+
+## Comunicacao com webservices municipais de NFS-e (FIS-21)
+
+`AbrasfNfseClient` (pacote `sefaz.nfse`) envia o RPS gerado pelo FIS-20 para
+o webservice da prefeitura (geracao/`GerarNfseEnvio`), consulta uma NFS-e ja
+emitida a partir do RPS que a originou (`ConsultarNfseRpsEnvio`) e cancela
+uma NFS-e (`CancelarNfseEnvio`) - as tres operacoes citadas no criterio de
+aceite. Mesmo estilo dos clientes SOAP da SEFAZ estadual (`sefaz.nfe`):
+mTLS com o certificado do prestador (`SefazHttpClientFactory`, reaproveitado
+sem alteracoes) e interpretacao da resposta por busca de tags (mesma
+tolerancia a variacao de envelope que os clientes de NFe ja usam).
+
+Duas diferencas deliberadas em relacao ao cliente de NFe:
+
+- **Endpoint por municipio, nao por UF.** `NfseEndpointRegistry` resolve o
+  endereco a partir do codigo IBGE do municipio (`nfse-webservices.properties`),
+  nao de uma UF. Diferente da NFe (uma lista nacional unica e publica por
+  UF, `ACBrNFeServicos.ini`), **nao existe um catalogo publico confiavel de
+  webservices de NFS-e por municipio** - cada prefeitura contrata sua propria
+  plataforma e o endpoint so e conhecido durante o credenciamento do
+  contribuinte junto aquela prefeitura. Por isso o properties comeca vazio:
+  cada municipio atendido precisa ser cadastrado manualmente durante o
+  onboarding do cliente daquele municipio especifico.
+- **Assinatura digital do RPS e opcional**, ao contrario da NFe/CT-e/MDF-e
+  (onde e sempre obrigatoria). O XSD da ABRASF permite `GerarNfseEnvio` sem
+  `dsig:Signature` - cada prefeitura decide se exige. Por isso
+  `AbrasfNfseClient` recebe o XML do RPS ja pronto (assinado ou nao,
+  decisao de quem chama) em vez de assinar internamente.
+
+Testado com o mesmo `ServidorSoapDeTeste` (mTLS local) ja usado pelos
+clientes de NFe - prova o fluxo completo (handshake mTLS + envelope SOAP +
+interpretacao da resposta) para as tres operacoes, sem depender de um
+webservice municipal real.
