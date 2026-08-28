@@ -17,8 +17,13 @@ public final class NotaFiscalEletronicaTestFixture {
     }
 
     public static NotaFiscalEletronica notaComImposto(ImpostoItem imposto) {
+        return notaComImposto(imposto, "3"); // 3 = Regime Normal, compativel com os grupos CST (ICMS00/ICMS40) usados por padrao
+    }
+
+    /** crt: Codigo de Regime Tributario do emitente - deve ser compativel com o grupo de ICMS do imposto (RVN, FIS-24). */
+    public static NotaFiscalEletronica notaComImposto(ImpostoItem imposto, String crt) {
         Endereco enderecoEmitente = new Endereco("Rua Teste", "100", "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1130000000");
-        Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", "1", enderecoEmitente);
+        Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", crt, enderecoEmitente);
 
         Endereco enderecoDestinatario = new Endereco("Av. Cliente", "200", "Jardins", "3550308", "Sao Paulo", "SP", "02000000", null);
         Destinatario destinatario = new Destinatario("987.654.321-00", "CLIENTE TESTE", "9", null, "cliente@teste.com", enderecoDestinatario);
@@ -37,7 +42,7 @@ public final class NotaFiscalEletronicaTestFixture {
     /** NFC-e (modelo 65) para consumidor nao identificado - sem destinatario (FIS-17). */
     public static NotaFiscalEletronica notaNfceSemDestinatario() {
         Endereco enderecoEmitente = new Endereco("Rua Teste", "100", "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1130000000");
-        Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", "1", enderecoEmitente);
+        Emitente emitente = new Emitente("12.345.678/0001-99", "EMPRESA TESTE LTDA", "TESTE", "111222333", "3", enderecoEmitente);
 
         ItemNota item = new ItemNota(1, "PROD001", "PRODUTO TESTE", "61099010", "5102", "UN",
                 BigDecimal.ONE.setScale(4), BigDecimal.valueOf(100.00).setScale(2), BigDecimal.valueOf(100.00).setScale(2),

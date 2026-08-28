@@ -58,7 +58,7 @@ class NfeXmlGeneratorTest {
     @Test
     void deveGerarGrupoIcmsSn102ParaEmitenteDoSimplesNacionalEValidoContraXsd() throws Exception {
         NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaComImposto(
-                NotaFiscalEletronicaTestFixture.impostoIcmsSN102());
+                NotaFiscalEletronicaTestFixture.impostoIcmsSN102(), "1");
 
         String xml = generator.gerar(nfe);
         Document documento = parse(xml);

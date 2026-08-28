@@ -207,3 +207,40 @@ nao algo que este adapter infere sozinho.
 Hoje conectado apenas no fluxo de NFe (`POST /api/v1/nfe`, o unico endpoint
 de emissao existente) - conectar nos futuros endpoints de NFC-e/CT-e/MDF-e
 e so chamar `reservar(...)` no mesmo ponto (apos autorizacao confirmada).
+
+## Validacao de Regras de Negocio - RVN (FIS-24)
+
+`RegraNegocioService` (pacote `documento/nfe/rvn`) roda antes da assinatura
+e do envio para a SEFAZ, para nao gastar uma tentativa de protocolo com algo
+que ja sabemos que sera rejeitado. Cada regra e um bean Spring que implementa
+`RegraNegocio`; a lista de regras e injetada automaticamente (adicionar uma
+nova regra e so criar a classe com `@Component`, nao precisa registrar em
+lugar nenhum).
+
+Regras implementadas hoje (codigos `RVN-001` a `RVN-006`), cada uma
+correspondendo a uma rejeicao real e comum da SEFAZ:
+
+1. **RVN-001** `RegraTotalItemConsistente` - vProd = qCom * vUnCom.
+2. **RVN-002** `RegraIcmsConsistente` - vICMS = vBC * pICMS / 100.
+3. **RVN-003** `RegraCfopCompativelComOperacao` - CFOP comeca com 5
+   (interna) ou 6 (interestadual) conforme a UF do destinatario.
+4. **RVN-004** `RegraSomaPagamentosIgualTotal` - soma de vPag = vNF.
+5. **RVN-005** `RegraRegimeTributarioCompativelComIcms` - emitente do
+   Simples Nacional (CRT 1/2/4) so pode usar grupos CSOSN; emitente do
+   Regime Normal (CRT 3) so pode usar grupos CST - uma das rejeicoes mais
+   comuns na pratica (CST/CSOSN incompativel com o regime do emitente).
+6. **RVN-006** `RegraDataEmissaoNaoFutura` - dhEmi nao pode ser posterior a
+   data atual.
+
+**Fora do escopo:** a SEFAZ publica centenas de regras de validacao oficiais
+(a planilha "Regras de Validação de Negócios" da NFe) - cobrir todas nao e
+viavel nem o objetivo aqui. O criterio de escolha foi: rejeicoes de
+inconsistencia aritmetica/estrutural que dependem so dos dados da propria
+nota (verificaveis sem tabelas externas de referencia, como NCM valido para
+a UF ou CFOP x CST permitido por produto) - o conjunto que mais aparece na
+pratica e que o adapter pode detectar com 100% de certeza antes de gastar
+uma tentativa de protocolo. Os codigos `RVN-*` sao proprios (nao os codigos
+numericos oficiais da SEFAZ) porque nao ha acesso a tabela oficial completa
+de codigos de rejeicao para garantir alinhamento exato - ver FIS-39
+(mapeamento de rejeicoes reais vindas da SEFAZ) para quando isso for
+resolvido.

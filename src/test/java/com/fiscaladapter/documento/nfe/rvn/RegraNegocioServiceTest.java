@@ -1,6 +1,8 @@
 package com.fiscaladapter.documento.nfe.rvn;
 
 import com.fiscaladapter.documento.nfe.DetalhePagamento;
+import com.fiscaladapter.documento.nfe.Emitente;
+import com.fiscaladapter.documento.nfe.IdentificacaoNfe;
 import com.fiscaladapter.documento.nfe.ImpostoItem;
 import com.fiscaladapter.documento.nfe.ItemNota;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
@@ -8,6 +10,7 @@ import com.fiscaladapter.documento.nfe.NotaFiscalEletronicaTestFixture;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,7 +22,9 @@ class RegraNegocioServiceTest {
             new RegraTotalItemConsistente(),
             new RegraIcmsConsistente(),
             new RegraCfopCompativelComOperacao(),
-            new RegraSomaPagamentosIgualTotal()
+            new RegraSomaPagamentosIgualTotal(),
+            new RegraRegimeTributarioCompativelComIcms(),
+            new RegraDataEmissaoNaoFutura()
     ));
 
     @Test
@@ -87,6 +92,48 @@ class RegraNegocioServiceTest {
                 .isInstanceOf(RegraNegocioVioladaException.class)
                 .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
                         .anyMatch(v -> v.codigo().equals("RVN-004")));
+    }
+
+    @Test
+    void deveRejeitarEmitenteDoSimplesNacionalUsandoGrupoCst() {
+        // notaDeExemplo() usa CRT=3 (Regime Normal) com ICMS00 (CST) - troca so o CRT para 1 (Simples Nacional)
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        Emitente emitenteSimplesNacional = new Emitente(base.emitente().cnpj(), base.emitente().razaoSocial(),
+                base.emitente().nomeFantasia(), base.emitente().inscricaoEstadual(), "1", base.emitente().endereco());
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(base.identificacao(), emitenteSimplesNacional,
+                base.destinatario(), base.itens(), base.pagamentos());
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-005")));
+    }
+
+    @Test
+    void deveRejeitarEmitenteDoRegimeNormalUsandoGrupoCsosn() {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaComImposto(
+                NotaFiscalEletronicaTestFixture.impostoIcmsSN102(), "3"); // CRT=3 (Regime Normal) com CSOSN - incompativel
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-005")));
+    }
+
+    @Test
+    void deveRejeitarDataDeEmissaoFutura() {
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        IdentificacaoNfe ideComDataFutura = new IdentificacaoNfe(base.identificacao().uf(), base.identificacao().naturezaOperacao(),
+                base.identificacao().serie(), base.identificacao().numero(), LocalDate.now().plusDays(1),
+                base.identificacao().ambiente(), base.identificacao().finalidadeEmissao(), base.identificacao().consumidorFinal(),
+                base.identificacao().codigoMunicipioFatoGerador(), base.identificacao().tipoDocumento());
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(ideComDataFutura, base.emitente(), base.destinatario(),
+                base.itens(), base.pagamentos());
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-006")));
     }
 
     private ItemNota trocarValorTotal(ItemNota original, BigDecimal novoValorTotal) {

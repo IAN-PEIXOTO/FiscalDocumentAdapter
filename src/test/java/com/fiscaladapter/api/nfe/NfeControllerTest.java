@@ -224,7 +224,7 @@ class NfeControllerTest {
 
         NfePedidoEmissaoRequest pedidoSemCertificado = pedidoValido();
         EmitRequest emitSemCertificado = new EmitRequest("00000000000000", null, "EMPRESA SEM CERTIFICADO", "TESTE",
-                pedidoSemCertificado.infNFe().emit().enderEmit(), "111222333", null, null, null, "1");
+                pedidoSemCertificado.infNFe().emit().enderEmit(), "111222333", null, null, null, "3");
         InfNfeRequest infNFe = new InfNfeRequest(pedidoSemCertificado.infNFe().ide(), emitSemCertificado,
                 pedidoSemCertificado.infNFe().dest(), pedidoSemCertificado.infNFe().det(),
                 pedidoSemCertificado.infNFe().transp(), pedidoSemCertificado.infNFe().pag());
@@ -265,7 +265,7 @@ class NfeControllerTest {
      */
     private NfePedidoEmissaoRequest pedidoValido(long numeroNota) {
         EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
-        EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
+        EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "3");
 
         EnderecoNfeRequest enderecoDestinatario = new EnderecoNfeRequest("Av. Cliente", "200", null, "Jardins", "3550308", "Sao Paulo", "SP", "02000000", "1058", "Brasil", null);
         DestRequest dest = new DestRequest(null, "98765432100", null, "CLIENTE TESTE", enderecoDestinatario, 9, null, null, null, "cliente@teste.com");

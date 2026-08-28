@@ -150,7 +150,7 @@ class NfeEmissaoPontaAPontaTest {
 
     private NfePedidoEmissaoRequest pedidoValido() {
         EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
-        EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA PONTA A PONTA LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
+        EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA PONTA A PONTA LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "3");
 
         EnderecoNfeRequest enderecoDestinatario = new EnderecoNfeRequest("Av. Cliente", "200", null, "Jardins", "3550308", "Sao Paulo", "SP", "02000000", "1058", "Brasil", null);
         DestRequest dest = new DestRequest(null, "98765432100", null, "CLIENTE TESTE", enderecoDestinatario, 9, null, null, null, "cliente@teste.com");
