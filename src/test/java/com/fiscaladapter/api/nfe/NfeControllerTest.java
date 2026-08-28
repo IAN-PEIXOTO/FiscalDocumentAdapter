@@ -97,7 +97,7 @@ class NfeControllerTest {
 
         mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .content(objectMapper.writeValueAsString(pedidoValido(100L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-teste-001"))
                 .andExpect(status().isOk())
@@ -117,7 +117,7 @@ class NfeControllerTest {
 
         mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .content(objectMapper.writeValueAsString(pedidoValido(101L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-rejeicao"))
                 .andExpect(status().isOk())
@@ -139,7 +139,7 @@ class NfeControllerTest {
 
         mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .content(objectMapper.writeValueAsString(pedidoValido(102L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-falha-comunicacao"))
                 .andExpect(status().isBadGateway());
@@ -151,17 +151,18 @@ class NfeControllerTest {
 
         String respostaPrimeiraChamada = mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .content(objectMapper.writeValueAsString(pedidoValido(103L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-repetida"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        // segunda tentativa com o MESMO numero de nota (nNF=42): se fosse reprocessada,
-        // a numeracao sequencial atribuiria um numero diferente e a chave de acesso mudaria
+        // segunda tentativa com o MESMO numero de nota: se fosse reprocessada em vez de
+        // servida do cache de idempotencia, a segunda reserva do numero 103 seria rejeitada
+        // como duplicidade (FIS-23) - a resposta identica prova que nao reprocessou
         String respostaSegundaChamada = mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(pedidoValido()))
+                        .content(objectMapper.writeValueAsString(pedidoValido(103L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-repetida"))
                 .andExpect(status().isOk())
@@ -253,6 +254,16 @@ class NfeControllerTest {
     }
 
     private NfePedidoEmissaoRequest pedidoValido() {
+        return pedidoValido(42L);
+    }
+
+    /**
+     * numeroNota distinto por teste: desde o FIS-23, o mesmo numero de nota para o
+     * mesmo emissor/UF/serie so pode ser reservado uma vez (documento efetivamente
+     * autorizado) - reusar 42 em todo teste bem-sucedido colidiria entre metodos,
+     * ja que a classe roda com TestInstance.PER_CLASS sobre o mesmo H2 compartilhado.
+     */
+    private NfePedidoEmissaoRequest pedidoValido(long numeroNota) {
         EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
         EmitRequest emit = new EmitRequest(CNPJ_EMISSOR, null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
 
@@ -270,7 +281,7 @@ class NfeControllerTest {
 
         DetRequest det = new DetRequest(1, prod, imposto);
 
-        IdeRequest ide = new IdeRequest(35, "VENDA DE MERCADORIA", 1, 42L, LocalDate.of(2026, 3, 15),
+        IdeRequest ide = new IdeRequest(35, "VENDA DE MERCADORIA", 1, numeroNota, LocalDate.of(2026, 3, 15),
                 1, 1, "3550308", 1, 1, 2, 1, 1, 9, 0, "1.0.0");
 
         TranspRequest transp = new TranspRequest(9);

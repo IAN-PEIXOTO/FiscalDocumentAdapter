@@ -6,6 +6,7 @@ import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.certificado.CertificadoNaoEncontradoException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
+import com.fiscaladapter.numeracao.NumeracaoIndisponivelException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.seguranca.EmissorNaoAutorizadoException;
 import org.slf4j.Logger;
@@ -96,6 +97,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RequisicaoEmProcessamentoException.class)
     public ResponseEntity<ErroResposta> tratar(RequisicaoEmProcessamentoException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(NumeracaoIndisponivelException.class)
+    public ResponseEntity<ErroResposta> tratar(NumeracaoIndisponivelException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
     }
 

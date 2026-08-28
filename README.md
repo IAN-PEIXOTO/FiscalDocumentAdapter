@@ -177,3 +177,33 @@ Testado com o mesmo `ServidorSoapDeTeste` (mTLS local) ja usado pelos
 clientes de NFe - prova o fluxo completo (handshake mTLS + envelope SOAP +
 interpretacao da resposta) para as tres operacoes, sem depender de um
 webservice municipal real.
+
+## Numeracao sequencial de documentos fiscais (FIS-23)
+
+`NumeracaoSequencialService` (pacote `numeracao`) garante que o numero de um
+documento (nNF/nCT/nMDF etc.) nunca e reutilizado por engano para o mesmo
+emissor/UF/serie/tipo de documento - duplicidade de numeracao e uma
+violacao legal, nao so um bug.
+
+Decisao de design: **o numero continua sendo escolhido pelo cliente** (o ERP,
+no mesmo formato da API ACBr), nao gerado pelo adapter. O adapter apenas
+**valida/reserva** o numero informado de forma atomica: `SequenciaDocumento`
+e uma linha por numero ja utilizado (nao um contador), com uma constraint
+unica em `(cnpj_emissor, uf, serie, tipo_documento, numero)` - duas
+requisicoes concorrentes tentando reservar o mesmo numero disputam a mesma
+linha no banco, so uma consegue inserir; a outra recebe
+`NumeracaoIndisponivelException` (HTTP 409). Essa e a propria garantia de
+atomicidade sob concorrencia, sem precisar de lock explicito.
+
+A reserva so acontece quando o documento **efetivamente valeu** perante o
+fisco - autorizado pela SEFAZ, ou liberado via EPEC (ver `NfeController`).
+Uma submissao rejeitada nao reserva nada: o ERP pode legitimamente corrigir
+e reenviar o mesmo numero, sem precisar "queimar" um numero para uma nota
+que nunca foi de fato emitida. Se o ERP decidir pular para o proximo numero
+em vez de corrigir, o numero pulado precisa ser formalmente inutilizado
+junto a SEFAZ (`NfeInutilizacaoClient`, FIS-5) - isso e uma decisao do ERP,
+nao algo que este adapter infere sozinho.
+
+Hoje conectado apenas no fluxo de NFe (`POST /api/v1/nfe`, o unico endpoint
+de emissao existente) - conectar nos futuros endpoints de NFC-e/CT-e/MDF-e
+e so chamar `reservar(...)` no mesmo ponto (apos autorizacao confirmada).

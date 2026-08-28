@@ -10,12 +10,19 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.persistence.Version;
 
+/**
+ * Um numero de documento fiscal ja reservado/utilizado para um dado
+ * emissor/UF/serie/tipo de documento (FIS-23). Uma linha por numero, nao um
+ * contador - a constraint unica em (cnpj_emissor, uf, serie, tipo_documento,
+ * numero) e o proprio mecanismo de deteccao atomica de duplicidade sob
+ * concorrencia: duas requisicoes tentando reservar o mesmo numero disputam a
+ * mesma linha no banco, so uma consegue inserir.
+ */
 @Entity
 @Table(
         name = "sequencia_documento",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"cnpj_emissor", "uf", "serie", "tipo_documento"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"cnpj_emissor", "uf", "serie", "tipo_documento", "numero"})
 )
 public class SequenciaDocumento {
 
@@ -36,27 +43,19 @@ public class SequenciaDocumento {
     @Column(name = "tipo_documento", nullable = false, length = 10)
     private TipoDocumentoFiscal tipoDocumento;
 
-    @Column(name = "ultimo_numero", nullable = false)
-    private long ultimoNumero;
-
-    @Version
-    private long version;
+    @Column(nullable = false)
+    private long numero;
 
     protected SequenciaDocumento() {
         // JPA
     }
 
-    SequenciaDocumento(String cnpjEmissor, String uf, int serie, TipoDocumentoFiscal tipoDocumento) {
+    SequenciaDocumento(String cnpjEmissor, String uf, int serie, TipoDocumentoFiscal tipoDocumento, long numero) {
         this.cnpjEmissor = cnpjEmissor;
         this.uf = uf;
         this.serie = serie;
         this.tipoDocumento = tipoDocumento;
-        this.ultimoNumero = 0;
-    }
-
-    long incrementarEObterProximo() {
-        this.ultimoNumero++;
-        return this.ultimoNumero;
+        this.numero = numero;
     }
 
     public Long getId() {
@@ -79,7 +78,7 @@ public class SequenciaDocumento {
         return tipoDocumento;
     }
 
-    public long getUltimoNumero() {
-        return ultimoNumero;
+    public long getNumero() {
+        return numero;
     }
 }

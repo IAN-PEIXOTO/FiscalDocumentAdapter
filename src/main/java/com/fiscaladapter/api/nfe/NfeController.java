@@ -3,11 +3,13 @@ package com.fiscaladapter.api.nfe;
 import com.fiscaladapter.api.idempotencia.IdempotenciaService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.danfe.DadosImpressaoDanfe;
 import com.fiscaladapter.documento.nfe.danfe.DanfeGenerator;
 import com.fiscaladapter.documento.nfe.danfe.OrientacaoDanfe;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
+import com.fiscaladapter.numeracao.NumeracaoSequencialService;
 import com.fiscaladapter.sefaz.nfe.EmissaoNfeOrquestrador;
 import com.fiscaladapter.sefaz.nfe.ResultadoEmissaoNfe;
 import jakarta.validation.Valid;
@@ -42,16 +44,19 @@ public class NfeController {
     private final IdempotenciaService idempotenciaService;
     private final EmissaoNfeOrquestrador emissaoNfeOrquestrador;
     private final DanfeGenerator danfeGenerator;
+    private final NumeracaoSequencialService numeracaoSequencialService;
 
     public NfeController(NfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                           RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService,
-                          EmissaoNfeOrquestrador emissaoNfeOrquestrador, DanfeGenerator danfeGenerator) {
+                          EmissaoNfeOrquestrador emissaoNfeOrquestrador, DanfeGenerator danfeGenerator,
+                          NumeracaoSequencialService numeracaoSequencialService) {
         this.mapper = mapper;
         this.certificadoEmissorService = certificadoEmissorService;
         this.regraNegocioService = regraNegocioService;
         this.idempotenciaService = idempotenciaService;
         this.emissaoNfeOrquestrador = emissaoNfeOrquestrador;
         this.danfeGenerator = danfeGenerator;
+        this.numeracaoSequencialService = numeracaoSequencialService;
     }
 
     @PostMapping("/api/v1/nfe")
@@ -80,6 +85,13 @@ public class NfeController {
                 certificadoEmissorService.carregar(clientId, nfe.emitente().cnpjSemMascara());
 
         ResultadoEmissaoNfe resultado = emissaoNfeOrquestrador.emitir(nfe, certificadoCarregado);
+
+        // so reserva o numero quando o documento efetivamente "valeu" perante o fisco (FIS-23) -
+        // uma submissao rejeitada nao consome o numero, o ERP pode corrigir e reenviar o mesmo.
+        if (resultado.autorizacao().autorizada() || resultado.viaEpec()) {
+            numeracaoSequencialService.reservar(nfe.emitente().cnpjSemMascara(), nfe.identificacao().uf(),
+                    nfe.identificacao().serie(), TipoDocumentoFiscal.NFE, nfe.identificacao().numero());
+        }
 
         return new NfeResponse(resultado.chaveAcesso(), resultado.xmlAssinado(),
                 resultado.autorizacao().autorizada(), resultado.autorizacao().codigoStatus(),
