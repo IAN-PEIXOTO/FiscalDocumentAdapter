@@ -1,17 +1,6 @@
 package com.fiscaladapter.api.nfe;
 
 import com.fiscaladapter.api.idempotencia.IdempotenciaService;
-import com.fiscaladapter.certificado.CertificadoCarregado;
-import com.fiscaladapter.certificado.CertificadoEmissorService;
-import com.fiscaladapter.documento.TipoDocumentoFiscal;
-import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
-import com.fiscaladapter.documento.nfe.danfe.DadosImpressaoDanfe;
-import com.fiscaladapter.documento.nfe.danfe.DanfeGenerator;
-import com.fiscaladapter.documento.nfe.danfe.OrientacaoDanfe;
-import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
-import com.fiscaladapter.numeracao.NumeracaoSequencialService;
-import com.fiscaladapter.sefaz.nfe.EmissaoNfeOrquestrador;
-import com.fiscaladapter.sefaz.nfe.ResultadoEmissaoNfe;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -20,9 +9,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.OffsetDateTime;
-import java.util.Base64;
-
 /**
  * Endpoint de recebimento de NFe, no mesmo formato JSON da API ACBr (ver
  * NfePedidoEmissaoRequest). O certificado do emissor e resolvido pelo CNPJ
@@ -30,33 +16,22 @@ import java.util.Base64;
  * registrado via POST /api/v1/certificados (FIS-2) - o cliente nao precisa
  * mais reenviar o .p12 a cada emissao.
  *
- * A geracao/assinatura/transmissao com retry e failover de contingencia
- * (FIS-7/FIS-37) fica em EmissaoNfeOrquestrador, nao aqui - o controller so
- * cuida de HTTP, autenticacao, resolucao do certificado, idempotencia e
- * geracao do DANFE (FIS-8) para devolver junto com o resultado da emissao.
+ * O pipeline de emissao (mapeamento, RVN, certificado, transmissao com
+ * retry/contingencia, reserva de numero, DANFE) fica em NfeEmissaoService,
+ * nao aqui - o controller so cuida de HTTP, autenticacao e idempotencia.
+ * Esse e o modo SINCRONO (a chamada bloqueia ate a SEFAZ responder); para o
+ * modo assincrono com notificacao via webhook ver
+ * EmissaoAssincronaController (POST /api/v1/nfe/assincrono, FIS-25).
  */
 @RestController
 public class NfeController {
 
-    private final NfeRequestMapper mapper;
-    private final CertificadoEmissorService certificadoEmissorService;
-    private final RegraNegocioService regraNegocioService;
+    private final NfeEmissaoService nfeEmissaoService;
     private final IdempotenciaService idempotenciaService;
-    private final EmissaoNfeOrquestrador emissaoNfeOrquestrador;
-    private final DanfeGenerator danfeGenerator;
-    private final NumeracaoSequencialService numeracaoSequencialService;
 
-    public NfeController(NfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
-                          RegraNegocioService regraNegocioService, IdempotenciaService idempotenciaService,
-                          EmissaoNfeOrquestrador emissaoNfeOrquestrador, DanfeGenerator danfeGenerator,
-                          NumeracaoSequencialService numeracaoSequencialService) {
-        this.mapper = mapper;
-        this.certificadoEmissorService = certificadoEmissorService;
-        this.regraNegocioService = regraNegocioService;
+    public NfeController(NfeEmissaoService nfeEmissaoService, IdempotenciaService idempotenciaService) {
+        this.nfeEmissaoService = nfeEmissaoService;
         this.idempotenciaService = idempotenciaService;
-        this.emissaoNfeOrquestrador = emissaoNfeOrquestrador;
-        this.danfeGenerator = danfeGenerator;
-        this.numeracaoSequencialService = numeracaoSequencialService;
     }
 
     @PostMapping("/api/v1/nfe")
@@ -65,61 +40,8 @@ public class NfeController {
                                                Authentication authentication) {
         String clientId = authentication.getName();
         NfeResponse resposta = idempotenciaService.executar(clientId, idempotencyKey, () ->
-                processar(documento, clientId));
+                nfeEmissaoService.processar(documento, clientId));
 
         return ResponseEntity.ok(resposta);
-    }
-
-    private NfeResponse processar(NfePedidoEmissaoRequest documento, String clientId) {
-        NotaFiscalEletronica nfe = mapper.paraDominio(documento);
-
-        // dest e opcional no DTO so para a NFC-e reaproveitar o mesmo mapeamento (FIS-17) -
-        // este endpoint e exclusivamente NFe (modelo 55), que sempre exige destinatario.
-        if (nfe.destinatario() == null) {
-            throw new IllegalArgumentException("infNFe.dest e obrigatorio para NFe (modelo 55)");
-        }
-
-        regraNegocioService.validar(nfe);
-
-        CertificadoCarregado certificadoCarregado =
-                certificadoEmissorService.carregar(clientId, nfe.emitente().cnpjSemMascara());
-
-        ResultadoEmissaoNfe resultado = emissaoNfeOrquestrador.emitir(nfe, certificadoCarregado);
-
-        // so reserva o numero quando o documento efetivamente "valeu" perante o fisco (FIS-23) -
-        // uma submissao rejeitada nao consome o numero, o ERP pode corrigir e reenviar o mesmo.
-        if (resultado.autorizacao().autorizada() || resultado.viaEpec()) {
-            numeracaoSequencialService.reservar(nfe.emitente().cnpjSemMascara(), nfe.identificacao().uf(),
-                    nfe.identificacao().serie(), TipoDocumentoFiscal.NFE, nfe.identificacao().numero());
-        }
-
-        return new NfeResponse(resultado.chaveAcesso(), resultado.xmlAssinado(),
-                resultado.autorizacao().autorizada(), resultado.autorizacao().codigoStatus(),
-                resultado.autorizacao().motivo(), resultado.autorizacao().numeroProtocolo(),
-                resultado.viaContingencia(), resultado.viaEpec(), gerarDanfeSePermitido(nfe, resultado));
-    }
-
-    /**
-     * O DANFE so tem validade legal para acompanhar a mercadoria quando a NFe
-     * foi autorizada ou ao menos liberada provisoriamente via EPEC - nao faz
-     * sentido (e seria enganoso) gerar o documento para uma nota rejeitada.
-     */
-    private String gerarDanfeSePermitido(NotaFiscalEletronica nfe, ResultadoEmissaoNfe resultado) {
-        if (!resultado.autorizacao().autorizada() && !resultado.viaEpec()) {
-            return null;
-        }
-
-        OffsetDateTime dataHoraAutorizacao = resultado.autorizacao().dhRecbto() != null
-                ? OffsetDateTime.parse(resultado.autorizacao().dhRecbto())
-                : null;
-
-        DadosImpressaoDanfe dados = new DadosImpressaoDanfe(
-                OrientacaoDanfe.RETRATO,
-                resultado.viaContingencia() || resultado.viaEpec(),
-                resultado.autorizacao().numeroProtocolo(),
-                dataHoraAutorizacao);
-
-        byte[] pdf = danfeGenerator.gerar(nfe, resultado.chaveAcesso(), dados);
-        return Base64.getEncoder().encodeToString(pdf);
     }
 }

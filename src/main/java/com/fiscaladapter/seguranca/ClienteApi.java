@@ -42,6 +42,9 @@ public class ClienteApi {
     @Column(name = "criado_em", nullable = false)
     private Instant criadoEm;
 
+    @Column(name = "webhook_url", length = 500)
+    private String webhookUrl;
+
     @Version
     private long version;
 
@@ -70,6 +73,15 @@ public class ClienteApi {
 
     public void revogar() {
         this.ativo = false;
+    }
+
+    /** Webhook de notificacao de status (FIS-25) - null desativa notificacoes para este cliente. */
+    public void definirWebhookUrl(String url) {
+        this.webhookUrl = url;
+    }
+
+    public String getWebhookUrl() {
+        return webhookUrl;
     }
 
     /**

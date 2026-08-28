@@ -51,6 +51,15 @@ public class ClienteApiService {
         buscarOuFalhar(clientId).revogar();
     }
 
+    @Transactional
+    public void definirWebhookUrl(String clientId, String url) {
+        buscarOuFalhar(clientId).definirWebhookUrl(url);
+    }
+
+    public String obterWebhookUrl(String clientId) {
+        return buscarOuFalhar(clientId).getWebhookUrl();
+    }
+
     private ClienteApi buscarOuFalhar(String clientId) {
         return repository.findByClientId(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("Cliente nao encontrado: " + clientId));

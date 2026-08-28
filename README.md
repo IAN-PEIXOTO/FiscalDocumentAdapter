@@ -244,3 +244,45 @@ numericos oficiais da SEFAZ) porque nao ha acesso a tabela oficial completa
 de codigos de rejeicao para garantir alinhamento exato - ver FIS-39
 (mapeamento de rejeicoes reais vindas da SEFAZ) para quando isso for
 resolvido.
+
+## Processamento assincrono e webhook (FIS-25)
+
+Nota: esta card descreve exatamente o que as cards FIS-30 (fila assincrona)
+e FIS-31 (webhook) fariam separadamente mais adiante no backlog - a pedido
+do usuario, tudo foi implementado aqui de uma vez, para nao reescrever a
+mesma coisa duas vezes; quando a ordem chegar em FIS-30/FIS-31, essas cards
+devem apenas apontar para o que segue.
+
+Alem do endpoint sincrono existente (`POST /api/v1/nfe`, que bloqueia ate a
+SEFAZ responder), agora existe um modo assincrono:
+
+- **`POST /api/v1/nfe/assincrono`** - mesmo corpo/formato do endpoint
+  sincrono, mas retorna **202 Accepted** imediatamente com o id do job, sem
+  esperar a SEFAZ. Idempotente por `(client_id, Idempotency-Key)`, igual ao
+  sincrono - reenviar a mesma chave retorna o id do mesmo job em vez de
+  enfileirar de novo.
+- **`GET /api/v1/nfe/assincrono/{id}`** - consulta o status
+  (`PENDENTE`/`PROCESSANDO`/`CONCLUIDA`/`FALHA`) e o resultado (o mesmo
+  formato de `NfeResponse` do endpoint sincrono, quando `CONCLUIDA`).
+- **`PUT /api/v1/webhook`** - cadastra a URL que recebe um POST quando um
+  job enfileirado termina (`tipo`: `nfe.autorizada`, `nfe.rejeitada` ou
+  `nfe.falha` - `nfe.cancelada` fica reservado para quando existir um
+  endpoint de cancelamento de NFe, que ainda nao existe). `GET
+  /api/v1/webhook` devolve a URL cadastrada (204 se nenhuma).
+
+**Arquitetura:** `EmissaoAssincronaWorker` faz *poll* periodico
+(`@Scheduled`, `fiscaladapter.assincrono.intervalo-poll-ms`, default 5s)
+sobre a tabela `emissao_assincrona`, processando um lote pequeno por vez
+atraves do mesmo `NfeEmissaoService` usado pelo endpoint sincrono (extraido
+do `NfeController` nesta mesma mudanca, para nao duplicar o pipeline de
+emissao). Sem broker externo (RabbitMQ/SQS/etc.) - simples o bastante para
+o volume atual, mais direto de operar sem mais uma peca de infraestrutura;
+revisitar se o volume justificar.
+
+**Entrega do webhook e best-effort**: `WebhookNotifierService` tenta 3 vezes
+com backoff curto e desiste - nao ha fila de redelivery persistente. Por
+isso o GET de consulta de status sempre existe: o webhook e uma
+conveniencia, nao a unica forma de saber o resultado. `http://` e aceito
+alem de `https://` so para testes locais - em producao o consumidor deve
+sempre cadastrar uma URL https, ja que o payload inclui chave de acesso e
+status fiscal.
