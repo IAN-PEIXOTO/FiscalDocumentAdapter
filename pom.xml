@@ -56,18 +56,11 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- XML: geracao/validacao contra XSD (JAXB) -->
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-        </dependency>
-
-        <!-- Assinatura digital XML-DSig e manipulacao de certificado PKCS#12 -->
-        <dependency>
-            <groupId>org.apache.santuario</groupId>
-            <artifactId>xmlsec</artifactId>
-            <version>3.0.4</version>
-        </dependency>
+        <!-- Manipulacao de certificado PKCS#12 (A1). Assinatura XML-DSig usa
+             javax.xml.crypto.dsig (JSR-105, nativo do JDK) e geracao/validacao
+             de XML usa XMLStreamWriter + javax.xml.validation (tambem nativos) -
+             ver "Bibliotecas e ferramentas de apoio (FIS-22)" no README para o
+             porque de nao usarmos JAXB/xjc nem Apache Santuario aqui. -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>

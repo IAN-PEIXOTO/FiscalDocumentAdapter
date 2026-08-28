@@ -33,6 +33,86 @@ Testes de ponta a ponta contra o ambiente de homologacao real da SEFAZ (com
 certificado digital valido e CNPJ cadastrado) nao estao incluidos aqui -
 exigem credenciais que so quem for rodar isso em homologacao de verdade tem.
 
+## Bibliotecas e ferramentas de apoio (FIS-22)
+
+Referencia do que este projeto efetivamente usa (ou deliberadamente nao usa)
+em cada area tecnica generica - assinatura XML, comunicacao SOAP, PDF, banco,
+testes etc. Objetivo: as demais historias tecnicas apontam para esta secao
+em vez de decidir biblioteca de novo a cada vez. Cada linha reflete o que
+esta de fato no `pom.xml`/codigo hoje, nao uma lista de intencoes.
+
+**API REST / Framework** - adotado como sugerido: Spring Boot (`spring-boot-starter-web`),
+Jackson (vem com o starter). **springdoc-openapi (Swagger) nao adotado ainda**
+- nenhum endpoint publico documentado automaticamente ate agora; considerar
+quando a API tiver consumidores externos alem dos testes.
+
+**XML (geracao e validacao)** - **JAXB/xjc NAO adotado**, apesar de sugerido
+(a dependencia `jaxb-runtime` chegou a ser adicionada e foi removida no
+FIS-22 por estar sem uso). Na pratica, os documentos sao construidos a mao
+com `javax.xml.stream.XMLStreamWriter` (ver `NfeXmlGenerator`, `CteXmlGenerator`,
+`MdfeXmlGenerator`, `AbrasfNfseXmlGenerator`) - decisao pragmatica: os XSDs
+oficiais (principalmente o de CT-e/MDF-e) sao grandes e cheios de grupos
+opcionais que xjc geraria mas que este adapter nao usa na sua primeira
+versao; escrever o XML diretamente da o mesmo resultado com menos
+classes geradas para manter. Validacao estrutural usa `javax.xml.validation`
+(nativo do JDK) direto contra os XSDs oficiais bundlados em `resources/xsd`
+- ver `NfeXsdValidator`, `CteXsdValidator`, `MdfeXsdValidator`, `AbrasfXsdValidator`.
+
+**Assinatura digital (XML-DSig)** - **Apache Santuario NAO adotado** (mesma
+razao do JAXB: a dependencia `xmlsec` foi adicionada e removida no FIS-22
+por estar sem uso). `AssinaturaXmlService` usa `javax.xml.crypto.dsig`
+(JSR-105), que ja vem no JDK e cobre exatamente o que a SEFAZ exige
+(enveloped signature, C14N, RSA-SHA1) sem dependencia externa. Bouncy Castle
+(`bcpkix-jdk18on`) e usado para leitura de certificados PKCS#12 (`CertificadoDigitalService`)
+e para gerar certificados de teste em memoria (`TestCertificadoFactory`).
+
+**Comunicacao SOAP com SEFAZ/prefeituras** - **Apache CXF/JAX-WS NAO adotado**.
+Os webservices da SEFAZ e das prefeituras seguem um envelope simples e
+estavel (ver `SoapClient` para NFe/CTe/MDFe, `AbrasfSoapClient` para NFS-e);
+montar o envelope como string e usar `java.net.http.HttpClient` (com mTLS
+via `SefazHttpClientFactory`) evita a complexidade de um stack JAX-WS
+completo (geracao de stubs a partir de WSDL, etc.) para um contrato que
+raramente muda. **Resilience4j NAO adotado** - o retry/contingencia de NFe
+(normal -> SVC -> EPEC, ver `EmissaoNfeOrquestrador`) e implementado a mao;
+revisitar se mais fluxos precisarem do mesmo padrao de retry/circuit
+breaker e a duplicacao começar a doer.
+
+**DANFE / DACTE / DAMDFE (PDF)** - OpenPDF adotado como sugerido
+(`DanfeGenerator`). **ZXing NAO adotado** - o conteudo do QR Code da NFC-e
+e gerado como string (`NfceQrCodeService`), mas a renderizacao como imagem
+de barras propriamente dita (para colar no PDF do DANFE NFC-e) ainda nao
+foi implementada - fica para o FIS-47 (Geracao do DANFE NFC-e), que e onde
+ZXing entraria.
+
+**Banco de dados** - adotado como sugerido: Spring Data JPA + Hibernate,
+Flyway. H2 em uso tanto em dev quanto nos testes (nao ha Postgres
+configurado ainda).
+
+**Seguranca** - Spring Security + OAuth2 (authorization server proprio,
+`client_id`/`client_secret`) adotado como sugerido. **Jasypt NAO adotado**
+- criptografia de certificados/segredos em repouso usa AES-256-GCM via
+`javax.crypto` puro (`CriptografiaEmRepousoService`, FIS-14), evitando mais
+uma dependencia para uma operacao que o JDK ja cobre bem.
+
+**Testes** - JUnit 5 + Mockito adotado como sugerido (vem com
+`spring-boot-starter-test`). **Testcontainers NAO adotado** - os testes
+usam H2 em memoria em vez de Postgres em container; suficiente enquanto o
+banco de producao alvo nao estiver definido. **WireMock NAO adotado** -
+`ServidorSoapDeTeste` (HTTPS local com mTLS real via BouncyCastle) e usado
+no lugar dele, porque o ponto mais fragil dos clientes SOAP daqui e
+justamente o handshake mTLS com o certificado do emissor, que o WireMock
+padrao nao exercita da mesma forma.
+
+**Observabilidade** - Micrometer + Prometheus adotado como sugerido
+(`NfeEmissaoMetrics`, FIS-11), Logback com correlacao via MDC
+(`MdcRequisicaoFilter`, `MdcChaveAcesso`). **OpenTelemetry NAO adotado
+ainda** - tracing distribuido nao e critico enquanto o fluxo
+JSON->XML->SEFAZ roda dentro de um unico processo; revisitar se a
+arquitetura ganhar mais servicos separados (ex.: fila assincrona do FIS-30).
+
+**CI/CD** - Maven, GitHub Actions adotado como sugerido. Testcontainers/Docker
+para ambiente reproduzivel de integracao nao se aplica ainda (ver "Testes" acima).
+
 ## NFS-e (FIS-20)
 
 Diferente de NFe/NFC-e/CT-e/MDF-e, a NFS-e **nao tem um schema XSD nacional
