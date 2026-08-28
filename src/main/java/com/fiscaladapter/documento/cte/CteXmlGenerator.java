@@ -32,6 +32,11 @@ public class CteXmlGenerator {
         this.chaveAcessoService = chaveAcessoService;
     }
 
+    /** Versao do layout CT-e suportada por este adapter (FIS-27) - hoje uma unica versao fixa. */
+    public String versaoLayout() {
+        return VERSAO_LAYOUT;
+    }
+
     public String gerar(Cte cte) {
         String chaveAcesso = chaveAcessoService.gerar(
                 cte.identificacao().uf(),

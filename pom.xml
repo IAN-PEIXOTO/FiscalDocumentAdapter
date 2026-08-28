@@ -114,6 +114,16 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- Popula /actuator/info (build.version etc.) a partir do pom.xml -
+                             versao da aplicacao (FIS-27), sem precisar duplicar manualmente
+                             o numero de versao em application.yml. -->
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

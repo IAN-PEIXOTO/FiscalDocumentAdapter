@@ -20,7 +20,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,prometheus
+        # info expoe a versao da aplicacao (build-info do Maven, ver pom.xml) - FIS-27
+        include: health,metrics,prometheus,info
   endpoint:
     health:
       show-details: never

@@ -30,6 +30,11 @@ public class MdfeXmlGenerator {
         this.chaveAcessoService = chaveAcessoService;
     }
 
+    /** Versao do layout MDF-e suportada por este adapter (FIS-27) - hoje uma unica versao fixa. */
+    public String versaoLayout() {
+        return VERSAO_LAYOUT;
+    }
+
     public String gerar(Mdfe mdfe) {
         String chaveAcesso = chaveAcessoService.gerar(
                 mdfe.identificacao().uf(),

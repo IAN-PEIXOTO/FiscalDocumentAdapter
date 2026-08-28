@@ -30,6 +30,11 @@ public class NfeXmlGenerator {
         this.chaveAcessoService = chaveAcessoService;
     }
 
+    /** Versao do layout NFe/NFC-e suportada por este adapter (FIS-27) - hoje uma unica versao fixa. */
+    public String versaoLayout() {
+        return VERSAO_LAYOUT;
+    }
+
     public String gerar(NotaFiscalEletronica nfe) {
         String chaveAcesso = chaveAcessoService.gerar(
                 nfe.identificacao().uf(),

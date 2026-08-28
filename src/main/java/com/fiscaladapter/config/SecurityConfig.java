@@ -14,7 +14,8 @@ import java.time.Duration;
 /**
  * Protege os endpoints da API com Bearer token (JWT) emitido pelo nosso
  * proprio Authorization Server (ver AuthorizationServerConfig, FIS-15).
- * /health fica publico para health check de infraestrutura.
+ * /health, /actuator/info e /api/versao ficam publicos (health check de
+ * infraestrutura e descoberta de versao, FIS-27 - nenhum dado fiscal).
  *
  * Cabecalhos de resposta (FIS-14): HSTS forca HTTPS em clientes que ja
  * visitaram a API, no-store impede que respostas com dados fiscais sensiveis
@@ -29,7 +30,7 @@ public class SecurityConfig {
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, RateLimitFilter rateLimitFilter,
                                                         MdcRequisicaoFilter mdcRequisicaoFilter) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health", "/actuator/health").permitAll()
+                        .requestMatchers("/health", "/actuator/health", "/actuator/info", "/api/versao").permitAll()
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/webhook", "/api/v1/webhook/**").hasAuthority("SCOPE_nfe")

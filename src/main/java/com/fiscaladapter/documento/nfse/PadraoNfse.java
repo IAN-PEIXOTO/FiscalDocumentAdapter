@@ -9,5 +9,16 @@ package com.fiscaladapter.documento.nfse;
  * como um novo {@link NfseXmlGenerator} - ver NfseXmlGeneratorRegistry.
  */
 public enum PadraoNfse {
-    ABRASF_V2_01
+    ABRASF_V2_01("ABRASF 2.01");
+
+    private final String descricao;
+
+    PadraoNfse(String descricao) {
+        this.descricao = descricao;
+    }
+
+    /** Descricao legivel do padrao/versao (FIS-27), ex.: para exibir em GET /api/versao. */
+    public String descricao() {
+        return descricao;
+    }
 }

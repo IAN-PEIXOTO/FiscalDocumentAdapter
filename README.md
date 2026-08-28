@@ -360,3 +360,65 @@ repositorio.
 4. RPO/RTO dependem exclusivamente da frequencia com que o backup e
    executado (nao definida aqui - e uma decisao operacional de quem roda
    isso em producao, ex.: backup diario = RPO de ate 24h).
+
+## Versionamento de API e evolucao de schemas fiscais (FIS-27)
+
+Nota: esta card descreve o que as cards FIS-35 (versionamento da API) e
+FIS-36 (migracao entre versoes de schema fiscal) fariam separadamente mais
+adiante no backlog - mesma decisao tomada no FIS-25/FIS-26. Quando a ordem
+chegar nessas cards, devem apenas apontar para o que segue.
+
+### Versionamento da API publica (FIS-35)
+
+**Estrategia: versionamento por path** (`/api/v1/...`), ja em uso desde o
+primeiro endpoint. Regras:
+
+- **Mudanca aditiva** (novo campo opcional no request/response, novo
+  endpoint, novo header opcional) - nao exige nova versao, entra direto em
+  `/api/v1`.
+- **Mudanca que quebra compatibilidade** (remover/renomear campo, mudar o
+  tipo de um campo existente, mudar o significado de um campo, remover um
+  endpoint) - exige `/api/v2`, com `/api/v1` continuando a funcionar em
+  paralelo por um periodo de transicao (a definir quando isso realmente
+  acontecer - nao ha ainda um `/api/v2` porque nao ha ainda uma mudanca que
+  o justifique; criar um agora seria especulativo).
+- **Descoberta de versao**: `GET /api/versao` (sem autenticacao - nao expoe
+  nenhum dado fiscal) devolve a versao da API e a versao do layout de cada
+  tipo de documento suportado nesta implantacao (`VersaoController`) -
+  integradores podem checar programaticamente antes de gerar um documento.
+  `GET /actuator/info` (tambem publico) devolve a versao de build da
+  aplicacao (populada automaticamente do `pom.xml` via o goal `build-info`
+  do `spring-boot-maven-plugin`).
+
+### Evolucao de schemas fiscais (FIS-36)
+
+A SEFAZ ja mudou a versao do layout da NFe varias vezes ao longo dos anos
+(3.10 -> 4.00, por exemplo); o mesmo pode acontecer com CT-e/MDF-e, e cada
+prefeitura de NFS-e evolui seu proprio padrao de forma independente. A
+convivencia entre versoes de schema ja tem um precedente real e testado
+neste projeto, nao e uma proposta teorica: **NFS-e ja suporta multiplos
+padroes simultaneamente** via `PadraoNfse` (enum dos padroes conhecidos) +
+`NfseXmlGeneratorRegistry` (resolve, por municipio, qual `NfseXmlGenerator`
+usar - ver "NFS-e (FIS-20)" acima). Essa e a estrategia recomendada para
+quando uma nova versao de layout de NFe/CT-e/MDF-e precisar conviver com a
+atual:
+
+1. Introduzir um enum `VersaoLayoutNfe` (ou CTe/MDFe) com as versoes
+   suportadas (ex.: `V4_00`, `V5_00`).
+2. Implementar um novo gerador (`NfeXmlGeneratorV5`, por exemplo) para a
+   nova versao, com seu proprio XSD bundlado em `resources/xsd` (nunca
+   sobrescrever o XSD da versao anterior - ambos precisam continuar
+   validando o que emitiram).
+3. Um registry (mesmo papel do `NfseXmlGeneratorRegistry`) resolve qual
+   gerador usar - por emitente, por UF, ou por uma janela de tempo de
+   transicao, dependendo de como a SEFAZ conduzir o rollout daquela vez
+   (historicamente a SEFAZ costuma dar uma janela de coexistencia entre
+   layouts, as vezes por UF).
+4. `GET /api/versao` passa a refletir a nova versao suportada
+   automaticamente (o valor vem do proprio gerador ativo).
+
+Nenhuma mudanca de codigo especulativa foi feita agora para uma versao de
+schema que nao existe ainda (isso seria trabalho morto, dificil de
+verificar sem o schema real publicado) - o objetivo desta secao e deixar
+documentado o caminho a seguir quando a mudanca real acontecer, apontando
+para o padrao que ja existe e ja funciona no NFS-e.
