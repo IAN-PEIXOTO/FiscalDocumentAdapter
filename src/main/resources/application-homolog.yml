@@ -1,4 +1,18 @@
+# Profile de homologacao (FIS-26/32). Ativar com SPRING_PROFILES_ACTIVE=homolog.
+# Mesma logica fail-fast do application-prod.yml (ver comentario la) - banco
+# e chave de criptografia proprios do ambiente, sem cair no default de dev.
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
 fiscaladapter:
   ambiente: homolog
   sefaz:
     tipo-ambiente: homologacao
+  seguranca:
+    chave-criptografia: ${FISCALADAPTER_CHAVE_CRIPTOGRAFIA}

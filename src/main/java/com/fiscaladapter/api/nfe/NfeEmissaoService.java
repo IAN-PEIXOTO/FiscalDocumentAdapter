@@ -9,6 +9,7 @@ import com.fiscaladapter.documento.nfe.danfe.DanfeGenerator;
 import com.fiscaladapter.documento.nfe.danfe.OrientacaoDanfe;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioService;
 import com.fiscaladapter.numeracao.NumeracaoSequencialService;
+import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.nfe.EmissaoNfeOrquestrador;
 import com.fiscaladapter.sefaz.nfe.ResultadoEmissaoNfe;
 import org.springframework.stereotype.Service;
@@ -32,16 +33,19 @@ public class NfeEmissaoService {
     private final EmissaoNfeOrquestrador emissaoNfeOrquestrador;
     private final DanfeGenerator danfeGenerator;
     private final NumeracaoSequencialService numeracaoSequencialService;
+    private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
 
     public NfeEmissaoService(NfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                               RegraNegocioService regraNegocioService, EmissaoNfeOrquestrador emissaoNfeOrquestrador,
-                              DanfeGenerator danfeGenerator, NumeracaoSequencialService numeracaoSequencialService) {
+                              DanfeGenerator danfeGenerator, NumeracaoSequencialService numeracaoSequencialService,
+                              RetencaoDocumentoFiscalService retencaoDocumentoFiscalService) {
         this.mapper = mapper;
         this.certificadoEmissorService = certificadoEmissorService;
         this.regraNegocioService = regraNegocioService;
         this.emissaoNfeOrquestrador = emissaoNfeOrquestrador;
         this.danfeGenerator = danfeGenerator;
         this.numeracaoSequencialService = numeracaoSequencialService;
+        this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
     }
 
     public NfeResponse processar(NfePedidoEmissaoRequest documento, String clientId) {
@@ -65,6 +69,11 @@ public class NfeEmissaoService {
         if (resultado.autorizacao().autorizada() || resultado.viaEpec()) {
             numeracaoSequencialService.reservar(nfe.emitente().cnpjSemMascara(), nfe.identificacao().uf(),
                     nfe.identificacao().serie(), TipoDocumentoFiscal.NFE, nfe.identificacao().numero());
+
+            // retencao legal do XML autorizado, no minimo 5 anos (FIS-26/34)
+            retencaoDocumentoFiscalService.arquivar(resultado.chaveAcesso(), nfe.emitente().cnpjSemMascara(),
+                    TipoDocumentoFiscal.NFE, resultado.autorizacao().numeroProtocolo(), resultado.xmlAssinado(),
+                    nfe.identificacao().dataEmissao());
         }
 
         return new NfeResponse(resultado.chaveAcesso(), resultado.xmlAssinado(),

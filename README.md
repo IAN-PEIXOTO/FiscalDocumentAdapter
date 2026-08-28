@@ -286,3 +286,77 @@ conveniencia, nao a unica forma de saber o resultado. `http://` e aceito
 alem de `https://` so para testes locais - em producao o consumidor deve
 sempre cadastrar uma URL https, ja que o payload inclui chave de acesso e
 status fiscal.
+
+## Operacao, ambientes e disaster recovery (FIS-26)
+
+Nota: esta card descreve o que as cards FIS-32 (config por ambiente), FIS-33
+(backup/DR do banco) e FIS-34 (retencao legal de XML) fariam separadamente
+mais adiante no backlog - a pedido do usuario, tudo foi implementado aqui de
+uma vez, mesma decisao tomada no FIS-25/FIS-30/FIS-31. Quando a ordem
+chegar nessas cards, devem apenas apontar para o que segue.
+
+### Configuracao por ambiente (FIS-32)
+
+Tres profiles Spring (`application-dev.yml`, `application-homolog.yml`,
+`application-prod.yml`), ativados via `SPRING_PROFILES_ACTIVE`:
+
+- **dev** (default): H2 em memoria e a chave de criptografia de dev, ambos
+  fixos em `application.yml` - sem nenhuma variavel de ambiente obrigatoria,
+  para rodar localmente sem configuracao.
+- **homolog**/**prod**: Postgres (`DATABASE_URL`/`DATABASE_USERNAME`/`DATABASE_PASSWORD`)
+  e a chave de criptografia (`FISCALADAPTER_CHAVE_CRIPTOGRAFIA`) **sem
+  nenhum default** - se a variavel de ambiente nao existir, a aplicacao
+  falha ao subir (fail-fast) em vez de silenciosamente cair no H2 em
+  memoria (perderia todos os dados a cada reinicio) ou na chave de dev
+  hardcoded (falha grave de seguranca).
+
+Essa mudanca corrigiu uma lacuna real que ja existia antes do FIS-26: os
+profiles homolog/prod so mudavam `fiscaladapter.ambiente`/`tipo-ambiente`,
+nunca o datasource - ou seja, um deploy em "producao" continuaria rodando
+contra H2 em memoria sem avisar ninguem.
+
+**ATENCAO (nao verificavel nesta sessao):** as migrations Flyway
+(`src/main/resources/db/migration`) foram escritas e sempre testadas contra
+H2. A sintaxe usada (`GENERATED ALWAYS AS IDENTITY`, `CLOB`) segue o padrao
+SQL/ANSI e deveria funcionar em Postgres, mas isso **nao foi validado de
+ponta a ponta contra um Postgres real** nesta sessao (sem acesso a um
+servidor Postgres neste ambiente). Antes do primeiro deploy de producao de
+verdade, rodar a aplicacao com o profile `prod`/`homolog` apontando para um
+Postgres de staging e confirmar que o Flyway migra e o Hibernate valida o
+schema sem erro.
+
+### Retencao legal de documentos fiscais (FIS-34)
+
+Todo documento autorizado (ou liberado via EPEC) e arquivado
+(`DocumentoFiscalArquivado`/`RetencaoDocumentoFiscalService`): o XML
+assinado completo, criptografado (AES-256-GCM, mesmo padrao ja usado pela
+idempotencia e pela fila assincrona), fica salvo indefinidamente - **nao ha
+nenhuma rotina de exclusao**, o que ja satisfaz "retencao minima de 5 anos"
+por definicao (a legislacao pede um minimo, nao um maximo). Documentos
+rejeitados nao sao arquivados (nunca foram "emitidos" de fato).
+
+`GET /api/v1/documentos/{chaveAcesso}` recupera o XML - restrito ao
+client_id dono do CNPJ emissor (mesma regra multi-tenant do FIS-10, via
+`AutorizacaoEmissorService`).
+
+### Backup e disaster recovery do banco (FIS-33)
+
+`scripts/backup-postgres.sh` e `scripts/restore-postgres.sh` - `pg_dump`/`pg_restore`
+com as mesmas variaveis de ambiente da aplicacao (`DATABASE_URL`/`DATABASE_USERNAME`/`DATABASE_PASSWORD`),
+formato `custom` (permite restore seletivo). Sem dependencia de nenhum
+provedor de nuvem especifico - agendar a execucao (cron, CI agendado, etc.)
+e copiar o dump gerado para o storage de retencao da empresa e
+responsabilidade de quem opera o ambiente, fora do escopo deste
+repositorio.
+
+**Runbook de recuperacao de desastre (resumo):**
+1. Provisionar um Postgres novo (ou identificar a instancia de destino).
+2. `./scripts/restore-postgres.sh caminho/do/ultimo-backup.dump` apontando
+   `DATABASE_URL`/`DATABASE_USERNAME`/`DATABASE_PASSWORD` para o banco de
+   destino (o script pede confirmacao explicita antes de sobrescrever).
+3. Apontar `DATABASE_URL` da aplicacao para o banco restaurado e subir a
+   aplicacao normalmente - o Flyway confere que o schema restaurado bate
+   com as migrations esperadas antes de aceitar trafego.
+4. RPO/RTO dependem exclusivamente da frequencia com que o backup e
+   executado (nao definida aqui - e uma decisao operacional de quem roda
+   isso em producao, ex.: backup diario = RPO de ate 24h).

@@ -74,15 +74,27 @@
             <version>1.3.42</version>
         </dependency>
 
-        <!-- Banco de dados (H2 em dev, troque por Postgres em producao) -->
+        <!-- Banco de dados: H2 em memoria em dev/teste (application.yml), Postgres
+             em homolog/producao (application-homolog.yml/application-prod.yml -
+             FIS-26/32). As duas dependencias de banco convivem porque o profile
+             ativo decide qual datasource e realmente usado em runtime. -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <dependency>

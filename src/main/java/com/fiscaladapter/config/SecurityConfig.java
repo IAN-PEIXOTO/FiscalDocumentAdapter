@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/webhook", "/api/v1/webhook/**").hasAuthority("SCOPE_nfe")
+                        .requestMatchers("/api/v1/documentos/**").hasAuthority("SCOPE_nfe")
                         .anyRequest().authenticated())
                 .csrf(csrf -> csrf.disable())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))

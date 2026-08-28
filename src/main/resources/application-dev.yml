@@ -1,3 +1,8 @@
+# Profile de desenvolvimento local/testes (FIS-26/32) - o default (application.yml
+# ja ativa "dev"). Usa H2 em memoria e a chave de criptografia de dev
+# hardcoded (ambos definidos em application.yml) de proposito - nao ha
+# variavel de ambiente para configurar aqui. Homolog/prod sobrescrevem os
+# dois (ver application-homolog.yml/application-prod.yml).
 fiscaladapter:
   ambiente: dev
   sefaz:

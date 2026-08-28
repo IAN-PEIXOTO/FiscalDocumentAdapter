@@ -1,4 +1,31 @@
+# Profile de producao (FIS-26/32). Ativar com SPRING_PROFILES_ACTIVE=prod.
+#
+# Datasource e chave de criptografia NAO tem default aqui de proposito: se a
+# variavel de ambiente correspondente nao existir, o Spring falha ao subir a
+# aplicacao (fail-fast) em vez de silenciosamente usar o H2 em memoria (que
+# perderia todos os dados a cada reinicio) ou a chave de dev hardcoded (que
+# seria uma falha grave de seguranca em producao).
+#
+# ATENCAO (nao verificavel nesta sessao - sem acesso a um Postgres real):
+# as migrations Flyway (src/main/resources/db/migration) foram escritas e
+# testadas apenas contra H2. A sintaxe usada (GENERATED ALWAYS AS IDENTITY,
+# CLOB) segue o padrao SQL/ANSI e deveria funcionar em Postgres, mas isso
+# NAO foi validado de ponta a ponta contra um Postgres real. Antes do
+# primeiro deploy de producao de verdade, rodar `./mvnw spring-boot:run`
+# com este profile apontando para um Postgres de staging e confirmar que
+# o Flyway migra e o Hibernate valida o schema sem erro.
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
 fiscaladapter:
   ambiente: prod
   sefaz:
     tipo-ambiente: producao
+  seguranca:
+    chave-criptografia: ${FISCALADAPTER_CHAVE_CRIPTOGRAFIA}

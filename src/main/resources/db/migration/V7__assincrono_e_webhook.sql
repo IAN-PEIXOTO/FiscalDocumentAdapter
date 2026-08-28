@@ -2,7 +2,7 @@
 ALTER TABLE cliente_api ADD COLUMN webhook_url VARCHAR(500);
 
 CREATE TABLE emissao_assincrona (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     client_id VARCHAR(64) NOT NULL,
     idempotency_key VARCHAR(200) NOT NULL,
     status VARCHAR(20) NOT NULL,
