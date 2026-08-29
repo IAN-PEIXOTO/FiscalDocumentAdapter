@@ -403,9 +403,18 @@ repositorio.
 3. Apontar `DATABASE_URL` da aplicacao para o banco restaurado e subir a
    aplicacao normalmente - o Flyway confere que o schema restaurado bate
    com as migrations esperadas antes de aceitar trafego.
-4. RPO/RTO dependem exclusivamente da frequencia com que o backup e
-   executado (nao definida aqui - e uma decisao operacional de quem roda
-   isso em producao, ex.: backup diario = RPO de ate 24h).
+4. RPO/RTO dependem da frequencia com que o backup e executado e de quanto
+   tempo leva o restore - ambos configuraveis por quem opera o ambiente,
+   nao fixos no codigo. **Meta recomendada (default sugerido, ajustavel por
+   quem opera producao):**
+   - **RPO de ate 24h**: `pg_dump` via `scripts/backup-postgres.sh` agendado
+     diariamente (ex.: cron/CI agendado fora deste repositorio).
+   - **RTO de ate 2h**: tempo estimado para provisionar um Postgres novo e
+     rodar `scripts/restore-postgres.sh` com o ultimo backup, ate a
+     aplicacao aceitar trafego de novo - deve ser confirmado na pratica
+     (um "restore drill" periodico) antes de tratar como garantido, ja que
+     nunca foi cronometrado contra um banco de producao real neste
+     sandbox.
 
 ## Versionamento de API e evolucao de schemas fiscais (FIS-27)
 
@@ -468,6 +477,17 @@ schema que nao existe ainda (isso seria trabalho morto, dificil de
 verificar sem o schema real publicado) - o objetivo desta secao e deixar
 documentado o caminho a seguir quando a mudanca real acontecer, apontando
 para o padrao que ja existe e ja funciona no NFS-e.
+
+**Cobertura dos criterios de aceite do FIS-36:** "suporte a mais de uma
+versao simultaneamente" tem precedente real (`NfseXmlGeneratorRegistry`,
+com `NfseXmlGeneratorRegistryTest` cobrindo a resolucao por padrao/municipio
+- o mesmo padrao de teste se aplicaria a um futuro registry de NFe/CT-e/MDF-e).
+"Monitoramento de prazo de descontinuacao anunciado pela SEFAZ" **nao foi
+implementado** - nao ha hoje nenhum job/alerta automatizado acompanhando
+comunicados da SEFAZ; isso e inerentemente um processo operacional (alguem
+acompanhando o Portal Nacional da NFe/notas tecnicas), nao algo que o
+codigo possa antecipar sem um schema real e um prazo real publicados. Fica
+registrado como gap conhecido, nao como "feito".
 
 ## Documentacao interativa da API (FIS-35)
 
