@@ -287,6 +287,26 @@ alem de `https://` so para testes locais - em producao o consumidor deve
 sempre cadastrar uma URL https, ja que o payload inclui chave de acesso e
 status fiscal.
 
+**Reprocessamento automatico com backoff (FIS-30):** o worker distingue
+falha transitoria de falha definitiva. `SefazComunicacaoException` (timeout,
+indisponibilidade) reagenda o job automaticamente (backoff exponencial: 30s,
+60s, 120s... ate 5 tentativas) em vez de marcar `FALHA` na primeira
+tentativa - qualquer outro erro (RVN violada, dado invalido) falha
+imediatamente, ja que uma nova tentativa nao mudaria o resultado. Esgotadas
+as 5 tentativas, o job vai para `FALHA` normalmente (e dispara o webhook de
+`nfe.falha`, se cadastrado).
+
+**Assinatura HMAC-SHA256 do webhook (FIS-31):** `PUT /api/v1/webhook` gera
+(e retorna, uma unica vez, no corpo da resposta) um secret novo a cada
+cadastro - guardado criptografado, nunca mais devolvido pela API depois
+disso. Toda notificacao e assinada com esse secret e enviada no header
+`X-Fiscaladapter-Signature: sha256=<hex>` (mesmo padrao GitHub/Stripe): o
+consumidor recalcula o HMAC do corpo recebido e compara, para confirmar que
+a notificacao realmente veio deste adapter. O payload tambem ganhou
+`eventoId` (UUID), para o consumidor deduplicar notificacoes reentregues.
+Clientes que cadastraram o webhook antes desse recurso existir nao tem
+secret - a notificacao simplesmente sai sem o header ate recadastrarem.
+
 ## Operacao, ambientes e disaster recovery (FIS-26)
 
 Nota: esta card descreve o que as cards FIS-32 (config por ambiente), FIS-33
@@ -315,6 +335,18 @@ profiles homolog/prod so mudavam `fiscaladapter.ambiente`/`tipo-ambiente`,
 nunca o datasource - ou seja, um deploy em "producao" continuaria rodando
 contra H2 em memoria sem avisar ninguem.
 
+**Ambiente visivel em cada linha de log:** `logging.pattern.level` em
+`application.yml` inclui `ambiente=${fiscaladapter.ambiente}` (resolvido a
+partir do profile ativo antes do logback inicializar), junto de
+`clientId`/`chaveAcesso` (MDC). Evita confundir logs de homolog e producao
+quando agregados no mesmo lugar (ex.: mesmo dashboard/ELK). Isolamento de
+certificado digital entre homolog e producao ja e garantido a nivel de
+infraestrutura desde o FIS-26: cada ambiente e um deploy/banco separado
+(`CertificadoEmissorService` guarda o certificado por `client_id` no banco
+daquele ambiente - nao ha como um certificado de homologacao aparecer no
+banco de producao sem alguem copiar os dados manualmente entre bancos
+distintos).
+
 **ATENCAO (nao verificavel nesta sessao):** as migrations Flyway
 (`src/main/resources/db/migration`) foram escritas e sempre testadas contra
 H2. A sintaxe usada (`GENERATED ALWAYS AS IDENTITY`, `CLOB`) segue o padrao
@@ -338,6 +370,20 @@ rejeitados nao sao arquivados (nunca foram "emitidos" de fato).
 `GET /api/v1/documentos/{chaveAcesso}` recupera o XML - restrito ao
 client_id dono do CNPJ emissor (mesma regra multi-tenant do FIS-10, via
 `AutorizacaoEmissorService`).
+
+**Trade-off deliberado (gap conhecido do FIS-34):** o criterio de aceite do
+FIS-34 pede armazenamento redundante/versionado separado do banco principal
+(ex.: object storage tipo S3). O que foi implementado guarda o XML
+criptografado no mesmo Postgres da aplicacao, e conta com
+`scripts/backup-postgres.sh` (FIS-33, acima) para a redundancia - ou seja,
+a durabilidade do arquivo fiscal depende da rotina de backup do banco estar
+de fato agendada, e nao de um segundo sistema de armazenamento independente.
+Essa escolha foi feita para nao introduzir mais uma dependencia de infra
+(credenciais de object storage, SDK, etc.) num MVP que ja usa Postgres como
+unica fonte de verdade em todo o resto do sistema. Se o volume ou uma
+exigencia de auditoria justificar, migrar `RetencaoDocumentoFiscalService`
+para gravar tambem (ou apenas) em object storage e uma extensao pontual,
+sem mudar o contrato do `GET /api/v1/documentos/{chaveAcesso}`.
 
 ### Backup e disaster recovery do banco (FIS-33)
 
@@ -422,3 +468,17 @@ schema que nao existe ainda (isso seria trabalho morto, dificil de
 verificar sem o schema real publicado) - o objetivo desta secao e deixar
 documentado o caminho a seguir quando a mudanca real acontecer, apontando
 para o padrao que ja existe e ja funciona no NFS-e.
+
+## Documentacao interativa da API (FIS-35)
+
+`springdoc-openapi-starter-webmvc-ui` gera a documentacao OpenAPI a partir
+dos controllers/DTOs (records) ja existentes, sem anotacao manual adicional
+na maioria dos casos:
+
+- **`GET /v3/api-docs`** - especificacao OpenAPI em JSON.
+- **`GET /swagger-ui.html`** - UI interativa para explorar/testar os
+  endpoints (o Bearer token da API continua exigido para de fato chamar
+  qualquer endpoint - a UI so documenta, nao contorna a autenticacao).
+
+Ambos ficam publicos em `SecurityConfig` (mesmo tratamento de `/api/versao`
+- e so schema/descricao gerado do proprio codigo, nenhum dado fiscal real).

@@ -92,8 +92,10 @@ class EmissaoAssincronaControllerTest {
 
     private String clientId;
     private String clientSecret;
+    private static String webhookSecret;
     private static HttpServer servidorWebhook;
     private static BlockingQueue<String> requisicoesRecebidas;
+    private static BlockingQueue<String> assinaturasRecebidas;
 
     @BeforeAll
     void prepararClienteCertificadoEWebhook() throws Exception {
@@ -107,22 +109,27 @@ class EmissaoAssincronaControllerTest {
         certificadoEmissorService.registrar(clientId, p12, "senha123".toCharArray());
 
         requisicoesRecebidas = new ArrayBlockingQueue<>(10);
+        assinaturasRecebidas = new ArrayBlockingQueue<>(10);
         servidorWebhook = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         servidorWebhook.createContext("/webhook", exchange -> {
             String corpo = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             requisicoesRecebidas.add(corpo);
+            assinaturasRecebidas.add(exchange.getRequestHeaders().getFirst("X-Fiscaladapter-Signature"));
             exchange.sendResponseHeaders(200, -1);
             exchange.close();
         });
         servidorWebhook.start();
 
         String accessToken = obterAccessToken();
-        mockMvc.perform(put("/api/v1/webhook")
+        String respostaWebhook = mockMvc.perform(put("/api/v1/webhook")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new com.fiscaladapter.webhook.WebhookUrlRequest(
                                 "http://localhost:" + servidorWebhook.getAddress().getPort() + "/webhook")))
                         .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.secret").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        webhookSecret = objectMapper.readTree(respostaWebhook).get("secret").asText();
     }
 
     @AfterAll
@@ -164,7 +171,16 @@ class EmissaoAssincronaControllerTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.resultado.numeroProtocolo").value("135260000000001"));
 
         String corpoWebhook = requisicoesRecebidas.poll(10, TimeUnit.SECONDS);
-        assertThat(corpoWebhook).isNotNull().contains("\"tipo\":\"nfe.autorizada\"").contains("135260000000001");
+        assertThat(corpoWebhook).isNotNull().contains("\"tipo\":\"nfe.autorizada\"").contains("135260000000001")
+                .contains("\"eventoId\"");
+        String assinaturaRecebida = assinaturasRecebidas.poll(10, TimeUnit.SECONDS);
+        assertThat(assinaturaRecebida).isEqualTo("sha256=" + assinarHmacEsperado(corpoWebhook));
+    }
+
+    private String assinarHmacEsperado(String corpo) throws Exception {
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return java.util.HexFormat.of().formatHex(mac.doFinal(corpo.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test

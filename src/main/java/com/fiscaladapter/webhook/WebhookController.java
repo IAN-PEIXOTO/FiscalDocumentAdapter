@@ -10,9 +10,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Cadastro do webhook de notificacao de status (FIS-25): quando definido, o
- * adapter chama essa URL com POST sempre que uma emissao enfileirada (ver
- * EmissaoAssincronaController) e concluida (autorizada, rejeitada ou falhou).
+ * Cadastro do webhook de notificacao de status (FIS-25/FIS-31): quando
+ * definido, o adapter chama essa URL com POST sempre que uma emissao
+ * enfileirada (ver EmissaoAssincronaController) e concluida (autorizada,
+ * rejeitada ou falhou). Cada cadastro gera um novo secret de assinatura
+ * HMAC-SHA256, devolvido em texto puro so nesta resposta - guarde-o para
+ * validar a assinatura das notificacoes recebidas (header
+ * X-Fiscaladapter-Signature: sha256=&lt;hex&gt;).
  */
 @RestController
 public class WebhookController {
@@ -24,9 +28,10 @@ public class WebhookController {
     }
 
     @PutMapping("/api/v1/webhook")
-    public ResponseEntity<Void> definir(@RequestBody @Valid WebhookUrlRequest request, Authentication authentication) {
-        clienteApiService.definirWebhookUrl(authentication.getName(), request.url());
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<WebhookCadastradoResponse> definir(@RequestBody @Valid WebhookUrlRequest request,
+                                                              Authentication authentication) {
+        String secret = clienteApiService.definirWebhookUrl(authentication.getName(), request.url());
+        return ResponseEntity.ok(new WebhookCadastradoResponse(request.url(), secret));
     }
 
     @GetMapping("/api/v1/webhook")

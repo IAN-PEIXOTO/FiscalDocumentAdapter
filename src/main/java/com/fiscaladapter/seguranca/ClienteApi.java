@@ -45,6 +45,10 @@ public class ClienteApi {
     @Column(name = "webhook_url", length = 500)
     private String webhookUrl;
 
+    /** Secret usado para assinar (HMAC-SHA256) o corpo enviado ao webhook (FIS-31) - criptografado em repouso. */
+    @Column(name = "webhook_secret_criptografado", length = 500)
+    private String webhookSecretCriptografado;
+
     @Version
     private long version;
 
@@ -80,8 +84,17 @@ public class ClienteApi {
         this.webhookUrl = url;
     }
 
+    /** Secret de assinatura HMAC do webhook (FIS-31), ja criptografado - gerado de novo a cada cadastro (rotaciona). */
+    public void definirWebhookSecretCriptografado(String secretCriptografado) {
+        this.webhookSecretCriptografado = secretCriptografado;
+    }
+
     public String getWebhookUrl() {
         return webhookUrl;
+    }
+
+    public String getWebhookSecretCriptografado() {
+        return webhookSecretCriptografado;
     }
 
     /**

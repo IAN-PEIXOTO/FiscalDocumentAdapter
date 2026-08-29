@@ -54,6 +54,13 @@ public class EmissaoAssincrona {
     @Column(name = "tentativas_notificacao", nullable = false)
     private int tentativasNotificacao;
 
+    @Column(name = "tentativas_processamento", nullable = false)
+    private int tentativasProcessamento;
+
+    /** Nulo = elegivel imediatamente; caso contrario, o worker so retoma este job apos esse instante (backoff). */
+    @Column(name = "proxima_tentativa_em")
+    private Instant proximaTentativaEm;
+
     @Column(name = "criado_em", nullable = false)
     private Instant criadoEm;
 
@@ -88,6 +95,15 @@ public class EmissaoAssincrona {
     public void falhar(String mensagemErro, Instant agora) {
         this.status = StatusEmissaoAssincrona.FALHA;
         this.erroMensagem = mensagemErro;
+        this.atualizadoEm = agora;
+    }
+
+    /** Falha transitoria (ex.: comunicacao com a SEFAZ): volta para PENDENTE e so fica elegivel de novo apos o backoff. */
+    public void reagendarAposFalhaTransitoria(String mensagemErro, Instant agora, Instant proximaTentativa) {
+        this.status = StatusEmissaoAssincrona.PENDENTE;
+        this.tentativasProcessamento++;
+        this.erroMensagem = mensagemErro;
+        this.proximaTentativaEm = proximaTentativa;
         this.atualizadoEm = agora;
     }
 
@@ -126,6 +142,14 @@ public class EmissaoAssincrona {
 
     public int getTentativasNotificacao() {
         return tentativasNotificacao;
+    }
+
+    public int getTentativasProcessamento() {
+        return tentativasProcessamento;
+    }
+
+    public Instant getProximaTentativaEm() {
+        return proximaTentativaEm;
     }
 
     public Instant getCriadoEm() {

@@ -5,12 +5,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HexFormat;
 
 /**
  * Notifica o consumidor da API via webhook quando uma emissao enfileirada
@@ -20,12 +23,20 @@ import java.time.Duration;
  * /api/v1/nfe/assincrono/{id} (EmissaoAssincronaController) se a notificacao
  * se perder de vez, entao o webhook e uma conveniencia, nao a unica fonte de
  * verdade do resultado.
+ *
+ * Assinatura HMAC-SHA256 (FIS-31): o corpo e assinado com o webhook secret
+ * do cliente (gerado no cadastro do webhook, ver ClienteApiService) e enviado
+ * no header X-Fiscaladapter-Signature no formato "sha256=<hex>", mesmo
+ * padrao adotado por GitHub/Stripe - o consumidor recalcula o HMAC do corpo
+ * recebido com o proprio secret e compara, para confirmar que a notificacao
+ * realmente veio deste adapter (e nao de terceiro fingindo ser).
  */
 @Service
 public class WebhookNotifierService {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookNotifierService.class);
     private static final int MAX_TENTATIVAS = 3;
+    private static final String ALGORITMO_HMAC = "HmacSHA256";
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -36,8 +47,14 @@ public class WebhookNotifierService {
         this.objectMapper = objectMapper;
     }
 
-    /** @return true se o webhook foi entregue (HTTP 2xx) dentro das tentativas permitidas. */
-    public boolean notificar(String webhookUrl, WebhookEventoPayload evento) {
+    /**
+     * @param webhookSecret usado para assinar o corpo (HMAC-SHA256); pode ser null se o cliente
+     *                       cadastrou a URL antes deste recurso existir - nesse caso o header de
+     *                       assinatura simplesmente nao e enviado (o consumidor deve recadastrar
+     *                       o webhook para obter um secret e poder validar a autenticidade).
+     * @return true se o webhook foi entregue (HTTP 2xx) dentro das tentativas permitidas.
+     */
+    public boolean notificar(String webhookUrl, String webhookSecret, WebhookEventoPayload evento) {
         String corpo;
         try {
             corpo = objectMapper.writeValueAsString(evento);
@@ -48,14 +65,17 @@ public class WebhookNotifierService {
 
         for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
             try {
-                HttpRequest requisicao = HttpRequest.newBuilder()
+                HttpRequest.Builder requisicao = HttpRequest.newBuilder()
                         .uri(URI.create(webhookUrl))
                         .timeout(Duration.ofSeconds(15))
                         .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(corpo, StandardCharsets.UTF_8))
-                        .build();
+                        .POST(HttpRequest.BodyPublishers.ofString(corpo, StandardCharsets.UTF_8));
 
-                HttpResponse<Void> resposta = httpClient.send(requisicao, HttpResponse.BodyHandlers.discarding());
+                if (webhookSecret != null) {
+                    requisicao.header("X-Fiscaladapter-Signature", "sha256=" + assinarHmac(corpo, webhookSecret));
+                }
+
+                HttpResponse<Void> resposta = httpClient.send(requisicao.build(), HttpResponse.BodyHandlers.discarding());
                 if (resposta.statusCode() >= 200 && resposta.statusCode() < 300) {
                     return true;
                 }
@@ -67,6 +87,17 @@ public class WebhookNotifierService {
         }
         log.error("Webhook {} nao pode ser entregue apos {} tentativas", webhookUrl, MAX_TENTATIVAS);
         return false;
+    }
+
+    private String assinarHmac(String corpo, String secret) {
+        try {
+            Mac mac = Mac.getInstance(ALGORITMO_HMAC);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), ALGORITMO_HMAC));
+            byte[] assinatura = mac.doFinal(corpo.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(assinatura);
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha ao assinar payload do webhook", e);
+        }
     }
 
     private void aguardarAntesDaProximaTentativa(int tentativa) {

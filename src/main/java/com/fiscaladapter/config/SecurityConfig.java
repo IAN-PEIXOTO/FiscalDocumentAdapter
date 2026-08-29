@@ -16,6 +16,10 @@ import java.time.Duration;
  * proprio Authorization Server (ver AuthorizationServerConfig, FIS-15).
  * /health, /actuator/info e /api/versao ficam publicos (health check de
  * infraestrutura e descoberta de versao, FIS-27 - nenhum dado fiscal).
+ * /v3/api-docs e /swagger-ui tambem ficam publicos (FIS-35): e so o schema/
+ * descricao dos endpoints (gerado do proprio codigo), nenhum dado fiscal
+ * real - o mesmo Bearer token da API continua exigido para de fato chamar
+ * qualquer endpoint documentado ali.
  *
  * Cabecalhos de resposta (FIS-14): HSTS forca HTTPS em clientes que ja
  * visitaram a API, no-store impede que respostas com dados fiscais sensiveis
@@ -30,7 +34,8 @@ public class SecurityConfig {
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, RateLimitFilter rateLimitFilter,
                                                         MdcRequisicaoFilter mdcRequisicaoFilter) throws Exception {
         http.authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health", "/actuator/health", "/actuator/info", "/api/versao").permitAll()
+                        .requestMatchers("/health", "/actuator/health", "/actuator/info", "/api/versao",
+                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/webhook", "/api/v1/webhook/**").hasAuthority("SCOPE_nfe")

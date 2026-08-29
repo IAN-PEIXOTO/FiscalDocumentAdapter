@@ -29,8 +29,10 @@ management:
 logging:
   pattern:
     # client_id e chave_acesso entram no log via MDC (ver MdcRequisicaoFilter) para
-    # correlacionar todas as linhas de uma mesma requisicao/NFe.
-    level: "%5p [clientId=%X{clientId:-} chaveAcesso=%X{chaveAcesso:-}]"
+    # correlacionar todas as linhas de uma mesma requisicao/NFe. ambiente vem de
+    # fiscaladapter.ambiente (placeholder resolvido no bind das properties, antes
+    # do logback inicializar) para nao confundir logs de homolog e prod (FIS-32).
+    level: "%5p [ambiente=${fiscaladapter.ambiente} clientId=%X{clientId:-} chaveAcesso=%X{chaveAcesso:-}]"
 
 fiscaladapter:
   ambiente: dev
