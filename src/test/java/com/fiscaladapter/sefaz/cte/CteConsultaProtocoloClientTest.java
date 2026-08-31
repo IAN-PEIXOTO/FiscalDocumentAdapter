@@ -1,0 +1,59 @@
+package com.fiscaladapter.sefaz.cte;
+
+import com.fiscaladapter.certificado.CertificadoCarregado;
+import com.fiscaladapter.certificado.CertificadoDigitalService;
+import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.documento.nfe.TipoAmbiente;
+import com.fiscaladapter.sefaz.SefazHttpClientFactory;
+import com.fiscaladapter.sefaz.ServidorSoapDeTeste;
+import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
+import org.junit.jupiter.api.Test;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class CteConsultaProtocoloClientTest {
+
+    private static final String CHAVE_ACESSO = "35260012345678000199570010000000421000000010";
+
+    private static final String RESPOSTA_AUTORIZADO =
+            "<soap12:Envelope xmlns:soap12=\"http://www.w3.org/2003/05/soap-envelope\">"
+                    + "<soap12:Body><cteConsultaResult>"
+                    + "<retConsSitCTe versao=\"4.00\" xmlns=\"http://www.portalfiscal.inf.br/cte\">"
+                    + "<tpAmb>2</tpAmb><cStat>100</cStat><xMotivo>Autorizado o uso do CT-e</xMotivo>"
+                    + "<protCTe versao=\"4.00\"><infProt><cStat>100</cStat><xMotivo>Autorizado o uso do CT-e</xMotivo>"
+                    + "<nProt>135260000000001</nProt><dhRecbto>2026-03-15T10:00:00-03:00</dhRecbto></infProt></protCTe>"
+                    + "</retConsSitCTe>"
+                    + "</cteConsultaResult></soap12:Body></soap12:Envelope>";
+
+    @Test
+    void deveConsultarCteEInterpretarAutorizacao() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).contains("consSitCTe").contains("<chCTe>" + CHAVE_ACESSO + "</chCTe>");
+            return RESPOSTA_AUTORIZADO;
+        })) {
+            HttpClient httpClient = new SefazHttpClientFactory()
+                    .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+            CteConsultaProtocoloClient client = new CteConsultaProtocoloClient(null, null);
+            ConsultaProtocoloResponse resposta = client.consultar(servidor.url(), CHAVE_ACESSO, TipoAmbiente.HOMOLOGACAO, httpClient);
+
+            assertThat(resposta.autorizada()).isTrue();
+            assertThat(resposta.numeroProtocolo()).isEqualTo("135260000000001");
+            assertThat(resposta.dhRecbto()).isEqualTo("2026-03-15T10:00:00-03:00");
+        }
+    }
+
+    private CertificadoCarregado certificadoDeTeste() throws Exception {
+        char[] senha = "senha123".toCharArray();
+        byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", senha,
+                Date.from(Instant.now().minus(Duration.ofDays(1))), Date.from(Instant.now().plus(Duration.ofDays(365))));
+        return new CertificadoDigitalService().carregar(TestCertificadoFactory.comoStream(p12), senha);
+    }
+}

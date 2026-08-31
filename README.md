@@ -313,6 +313,61 @@ contingencia automatica.
   `tipo_operacao` como parte da chave unica, migration V11) - coberto por
   teste especifico de nao-colisao entre os dois endpoints.
 
+## Emissao, consulta e cancelamento de CT-e (FIS-44)
+
+CT-e (modelo 57) tem dominio, mapeamento e schema JSON proprios - diferente
+da NFC-e (FIS-43), que reusou quase tudo da NFe, o CT-e transporta (tomador,
+remetente/destinatario, informacao de carga, NF-e vinculadas), nao vende
+mercadoria, entao o payload (`CtePedidoEmissaoRequest`) e a pipeline sao
+novos, so reaproveitando o que ja e generico (`Emitente`/`Endereco` da NFe,
+`ChaveAcessoService`, `NumeracaoSequencialService`/`RetencaoDocumentoFiscalService`
+via `TipoDocumentoFiscal.CTE`).
+
+- **`POST /api/v1/cte`** (novo) - mapeamento -> certificado ->
+  chave/XML/assinatura -> validacao XSD -> autorizacao **sincrona**
+  (`CTeRecepcaoSincV4`) -> numeracao -> retencao. Sem RVN (nao existe ainda
+  um conjunto de regras de negocio proprio do CT-e - seria um card a parte,
+  no espirito do FIS-24) e sem contingencia automatica SVC-RS/SVC-SP (mesma
+  decisao da NFC-e/FIS-43 - falha de comunicacao vira erro 502, nao
+  failover automatico).
+- **Autorizacao e consulta (criterio de aceite 1)**: o CT-e 4.00 **nao tem
+  mais um modo em lote/assincrono** - a SEFAZ desativou `CTeRecepcao`/
+  `CTeRetRecepcao` em 30/06/2024 (NT 2024.001), migrando tudo para
+  `CTeRecepcaoSincV4` (um documento por chamada, resposta imediata, sem
+  `idLote`/`indSinc` como a NFe). "Consulta de lote" no criterio de aceite
+  reflete a terminologia anterior a essa mudanca - o que existe hoje e
+  `POST /api/v1/cte/{chaveAcesso}/consulta` (`CTeConsultaV4`), consulta de
+  situacao por chave, igual ao padrao ja usado na NFe/NFC-e.
+- **Cancelamento respeitando o prazo legal (criterio de aceite 2)**: `POST
+  /api/v1/cte/{chaveAcesso}/cancelamento` consulta a SEFAZ para a data real
+  de autorizacao e bloqueia (HTTP 422) alem de **168 horas (7 dias)**
+  (Ajuste SINIEF 09/07, clausula 14 - algumas UFs reduzem esse prazo, ex.:
+  MT para 24h, nao verificado por UF nesta sessao). Cancelamento
+  extemporaneo (apos o prazo, processo especifico de cada UF) fica fora do
+  escopo.
+- **Vinculo com os documentos transportados (criterio de aceite 3)**: tanto
+  a resposta da emissao quanto a da consulta trazem
+  `notasFiscaisTransportadas` (as chaves de NF-e vinculadas) - na emissao,
+  ecoada do proprio pedido; na consulta, extraida do XML arquivado por este
+  adapter (`RetencaoDocumentoFiscalService`, FIS-26/34), ja que a SEFAZ nao
+  devolve essa lista na consulta de situacao (so cStat/protocolo). Fica
+  vazia se o CT-e consultado nao foi emitido por este adapter.
+
+**Estrutura SOAP diferente da NFe/NFC-e (verificado contra a implementacao
+de referencia nfephp-org/sped-cte, `Common/Tools.php`):** a autorizacao
+exige o XML **gzip+base64** dentro de `cteDadosMsg` (a NFe envia texto puro
+em `nfeDadosMsg`) - consulta e cancelamento continuam em texto puro. Header
+SOAP `cteCabecMsg` (nao `nfeCabecMsg`). Endpoints proprios do CT-e
+(`cte-webservices.properties`, fonte ACBrCTeServicos.ini) - infraestrutura
+separada da NFe mesmo quando o host e o mesmo (SP/SVRS hospedam ambos, mas
+em caminhos distintos).
+
+**ATENCAO (nao verificavel nesta sessao):** a versao do evento de
+cancelamento (`"4.00"`) foi assumida por alinhamento com a URL do servico
+(`CTeRecepcaoEventoV4`), nao confirmada contra homologacao real - a NFe usa
+uma versao de evento fixa ("1.00") independente do layout do documento, e
+nao ha garantia de que o CT-e siga o mesmo padrao.
+
 ## Mapeamento de codigos de rejeicao da SEFAZ (FIS-39)
 
 O cStat/xMotivo bruto da SEFAZ (ex.: `"539"` / `"Duplicidade de NF-e"`)
