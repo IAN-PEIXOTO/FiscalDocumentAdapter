@@ -10,6 +10,7 @@ import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.numeracao.NumeracaoIndisponivelException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.sefaz.cte.PrazoCancelamentoCteExpiradoException;
+import com.fiscaladapter.sefaz.mdfe.PrazoCancelamentoMdfeExpiradoException;
 import com.fiscaladapter.sefaz.nfe.PrazoCancelamentoNfceExpiradoException;
 import com.fiscaladapter.seguranca.EmissorNaoAutorizadoException;
 import org.slf4j.Logger;
@@ -115,6 +116,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PrazoCancelamentoCteExpiradoException.class)
     public ResponseEntity<ErroResposta> tratar(PrazoCancelamentoCteExpiradoException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(PrazoCancelamentoMdfeExpiradoException.class)
+    public ResponseEntity<ErroResposta> tratar(PrazoCancelamentoMdfeExpiradoException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErroResposta(e.getMessage()));
     }
 

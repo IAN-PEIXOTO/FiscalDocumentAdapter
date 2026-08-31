@@ -368,6 +368,55 @@ cancelamento (`"4.00"`) foi assumida por alinhamento com a URL do servico
 uma versao de evento fixa ("1.00") independente do layout do documento, e
 nao ha garantia de que o CT-e siga o mesmo padrao.
 
+## Emissao, consulta, encerramento e cancelamento de MDF-e (FIS-19/FIS-45)
+
+MDF-e (modelo 58) tem dominio, mapeamento e schema JSON proprios, mesmo
+espirito do CT-e (FIS-44) - o manifesto agrupa CT-e/NF-e transportados por
+um veiculo/condutor numa viagem, nao vende nem transporta um unico
+documento. A geracao do XML principal e do evento de Encerramento (fim de
+percurso) ja existiam desde o FIS-19 (`MdfeXmlGenerator`,
+`MdfeEncerramentoXmlGenerator` - so gerava o XML do evento, sem
+assinar/transmitir, deliberadamente deixado "para o FIS-45" no proprio
+javadoc da classe); faltava a integracao real com a SEFAZ.
+
+- **`POST /api/v1/mdfe`** (novo) - mapeamento -> certificado ->
+  chave/XML/assinatura -> validacao XSD -> autorizacao **sincrona**
+  (`MDFeRecepcaoSinc`) -> numeracao -> retencao. Mesma migracao do CT-e: a
+  SEFAZ desativou o modo em lote (`MDFeRecepcao`/`MDFeRetRecepcao`) em
+  30/06/2024 (NT 2024.001) - "consulta de lote" no criterio de aceite
+  reflete a terminologia anterior a essa mudanca. Sem RVN propria e sem
+  contingencia automatica (mesma decisao do CT-e/FIS-44).
+- **Consulta**: `POST /api/v1/mdfe/{chaveAcesso}/consulta` (`MDFeConsulta`).
+- **Encerramento do manifesto - fim de percurso (criterio de aceite 2)**:
+  `POST /api/v1/mdfe/{chaveAcesso}/encerramento` (evento tpEvento=110112,
+  servico `MDFeRecepcaoEvento`) - completa o `MdfeEncerramentoXmlGenerator`
+  ja existente assinando e transmitindo o evento que ele gera. O municipio
+  de encerramento e informado pelo chamador (pode diferir do municipio de
+  descarga previsto na emissao).
+- **Cancelamento dentro do prazo legal (criterio de aceite 3)**: `POST
+  /api/v1/mdfe/{chaveAcesso}/cancelamento` consulta a SEFAZ para a data
+  real de autorizacao e bloqueia (HTTP 422) alem de **24 horas** (Ajuste
+  SINIEF 21/2010) - o prazo mais curto entre os quatro documentos deste
+  adapter (NFC-e 30 min, MDF-e 24h, NFe historicamente 24h/variavel por UF,
+  CT-e 168h). A condicao adicional do Ajuste ("desde que o transporte ainda
+  nao tenha iniciado") nao e verificavel localmente - fica a cargo da
+  propria SEFAZ rejeitar se for o caso.
+
+**Infraestrutura 100% centralizada na SVRS** (diferente do CT-e, onde
+MG/MS/MT/PR/SP tem endpoint proprio) - as 27 UFs delegam para o mesmo
+endereco (`mdfe-webservices.properties`, fonte ACBrMDFeServicos.ini).
+Mesma estrutura SOAP do CT-e (header `mdfeCabecMsg`, corpo `mdfeDadosMsg`,
+autorizacao gzip+base64, consulta/evento em texto puro), verificada contra
+a implementacao de referencia nfephp-org/sped-mdfe.
+
+**ATENCAO (nao verificavel nesta sessao):** uma fonte secundaria (nao a
+implementacao de referencia) sugere que o binding especifico do
+`MDFeRecepcaoSinc` nao declara `mdfeCabecMsg` no WSDL - a implementacao de
+referencia, porem, envia esse header uniformemente para todos os servicos
+(inclusive o sincrono), e e o que este adapter segue, ja que um header
+SOAP nao declarado no binding e tipicamente ignorado pelo servidor (sem
+`mustUnderstand`), nao rejeitado.
+
 ## Mapeamento de codigos de rejeicao da SEFAZ (FIS-39)
 
 O cStat/xMotivo bruto da SEFAZ (ex.: `"539"` / `"Duplicidade de NF-e"`)
