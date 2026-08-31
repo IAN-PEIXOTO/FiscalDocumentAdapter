@@ -277,6 +277,52 @@ liberada provisoriamente via EPEC (`viaEpec=true`), `autorizada` fica
 `false` mas isso nao e um erro do cliente - por isso `NfeEmissaoService` so
 consulta o catalogo quando `!autorizada && !viaEpec` (rejeicao de fato).
 
+## Manifestacao do destinatario e consulta de NF-e destinadas (FIS-40)
+
+`POST /api/v1/nfe/{chaveAcesso}/manifestacao` (ja existente desde o FIS-9)
+suporta os quatro tipos de manifestacao previstos pela SEFAZ
+(`TipoManifestacaoDestinatario`): Confirmacao da Operacao, Ciencia da
+Operacao, Desconhecimento da Operacao e Operacao nao Realizada (essa ultima
+exige justificativa com pelo menos 15 caracteres, igual ao evento oficial).
+
+**Consulta de NF-e destinadas (novo neste card)**: `GET
+/api/v1/nfe/destinadas?cnpjDestinatario=...&uf=...&ambiente=...` descobre
+quais NF-e foram destinadas a um CNPJ mas nao emitidas por ele - o cenario
+que faltava para o destinatario saber *o que* manifestar, sem precisar ja
+conhecer a chave de acesso de antemao. Implementado via
+`NfeDistribuicaoDfeClient` (webservice nacional `NFeDistribuicaoDFe`,
+consulta incremental por NSU) + `DistribuicaoDfeService`, que guarda o
+cursor de NSU por CNPJ (`DistribuicaoDfeCursor`/migration V10) para nunca
+reconsultar do zero, e pagina automaticamente ate esgotar o lote disponivel
+numa mesma chamada (limite de 20 paginas por chamada - documentado via log
+se atingido sem esgotar, os documentos restantes saem na proxima consulta).
+
+**ATENCAO (nao verificavel nesta sessao):** a estrutura do envelope SOAP da
+`NFeDistribuicaoDFe` e diferente dos demais servicos da NFe 4.00 usados
+neste projeto (Header vazio, Body com um elemento extra em volta de
+`nfeDadosMsg`) - baseada na implementacao de referencia do
+`nfephp-org/sped-nfe`, sem acesso a um ambiente de homologacao real para
+validar empiricamente. Revisar contra homologacao real antes do primeiro
+uso em producao.
+
+**Consumo indevido (cStat 656)**: a SEFAZ rejeita consultas repetidas em
+curto intervalo sem novidade. O adapter bloqueia preventivamente
+(`ConsultaDistribuicaoDfeMuitoFrequenteException`, HTTP 429) quando a
+ultima consulta bem-sucedida para aquele CNPJ foi ha menos de 1 hora, em
+vez de gastar a tentativa e ser rejeitado pela SEFAZ.
+
+**Prazo de manifestacao controlado e alertado (criterio de aceite 3)**: a
+SEFAZ nao devolve prazo pronto - `DistribuicaoDfeService` calcula, para
+cada NF-e destinada, `dataLimiteManifestacao` (data de autorizacao + 90
+dias corridos) e `diasRestantesParaManifestar`, marcando
+`alertaProximoDoPrazo=true` nos ultimos 15 dias e `prazoExpirado=true`
+depois de vencido. **90 dias** e o prazo vigente desde 01/06/2026 (Ajuste
+SINIEF 14/2026, que reduziu o prazo anterior de 180 dias) para Confirmacao,
+Desconhecimento e Operacao nao Realizada - Ciencia da Operacao nao tem
+prazo/efeito fiscal proprio, mas a NFeDistribuicaoDFe nao informa qual
+manifestacao (se alguma) ja foi registrada para cada resumo, entao o
+adapter calcula a mesma data limite para todos os resumos devolvidos.
+
 ## Processamento assincrono e webhook (FIS-25)
 
 Nota: esta card descreve exatamente o que as cards FIS-30 (fila assincrona)

@@ -4,6 +4,7 @@ import com.fiscaladapter.api.idempotencia.RequisicaoEmProcessamentoException;
 import com.fiscaladapter.assinatura.AssinaturaDigitalException;
 import com.fiscaladapter.certificado.CertificadoInvalidoException;
 import com.fiscaladapter.certificado.CertificadoNaoEncontradoException;
+import com.fiscaladapter.distribuicao.ConsultaDistribuicaoDfeMuitoFrequenteException;
 import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.numeracao.NumeracaoIndisponivelException;
@@ -103,6 +104,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NumeracaoIndisponivelException.class)
     public ResponseEntity<ErroResposta> tratar(NumeracaoIndisponivelException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(ConsultaDistribuicaoDfeMuitoFrequenteException.class)
+    public ResponseEntity<ErroResposta> tratar(ConsultaDistribuicaoDfeMuitoFrequenteException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ErroResposta(e.getMessage()));
     }
 
     @ExceptionHandler(SefazComunicacaoException.class)

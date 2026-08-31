@@ -23,8 +23,13 @@ class SefazEndpointRegistryTest {
     }
 
     @Test
-    void deveResolverTodosOsServicosParaHomologacao() {
+    void deveResolverTodosOsServicosPorUfParaHomologacao() {
         for (TipoServicoSefaz servico : TipoServicoSefaz.values()) {
+            if (servico == TipoServicoSefaz.DISTRIBUICAO_DFE) {
+                // DISTRIBUICAO_DFE (FIS-40) e nacional, nunca por UF - ver
+                // deveResolverDistribuicaoDfeDoAmbienteNacional abaixo.
+                continue;
+            }
             assertThat(registry.obterUrl("RJ", TipoAmbiente.HOMOLOGACAO, servico)).startsWith("https://");
         }
     }
@@ -44,6 +49,14 @@ class SefazEndpointRegistryTest {
         assertThat(registry.obterUrl("AN", TipoAmbiente.PRODUCAO, TipoServicoSefaz.RECEPCAO_EVENTO))
                 .startsWith("https://");
         assertThat(registry.obterUrl("AN", TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.RECEPCAO_EVENTO))
+                .startsWith("https://");
+    }
+
+    @Test
+    void deveResolverDistribuicaoDfeDoAmbienteNacional() {
+        assertThat(registry.obterUrl("AN", TipoAmbiente.PRODUCAO, TipoServicoSefaz.DISTRIBUICAO_DFE))
+                .startsWith("https://");
+        assertThat(registry.obterUrl("AN", TipoAmbiente.HOMOLOGACAO, TipoServicoSefaz.DISTRIBUICAO_DFE))
                 .startsWith("https://");
     }
 
