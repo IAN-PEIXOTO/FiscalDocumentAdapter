@@ -428,6 +428,30 @@ cancelamento (`"4.00"`) foi assumida por alinhamento com a URL do servico
 uma versao de evento fixa ("1.00") independente do layout do documento, e
 nao ha garantia de que o CT-e siga o mesmo padrao.
 
+## Geracao do DAMDFE (FIS-49)
+
+`POST /api/v1/mdfe` agora devolve `damdfePdfBase64` (nulo quando o MDF-e foi
+rejeitado) - um DAMDFE em PDF, gerado por `DamdfeGenerator`
+(`com.fiscaladapter.documento.mdfe.damdfe`), no mesmo padrao do
+`DanfeGenerator`/`DacteGenerator`: A4 retrato, codigo de barras Code128 da
+chave de acesso (AC2), blocos de emitente, veiculo/motorista(s), percurso e
+documentos fiscais vinculados (CT-e/NF-e, AC1).
+
+- **"Indicacao de encerramento quando aplicavel" (AC3)** e o unico dos tres
+  criterios que nao se resolve com um unico PDF gerado na emissao: o
+  manifesto acabou de ser autorizado nesse momento, a viagem ainda nao
+  terminou. Por isso, `POST /api/v1/mdfe/{chaveAcesso}/encerramento` (FIS-45)
+  agora tambem devolve `damdfePdfBase64` - um **DAMDFE reimpresso** com o
+  aviso "MDF-e ENCERRADO" e a data/municipio de encerramento, gerado so
+  quando `encerrado=true`.
+  - Esse endpoint so recebe a chave de acesso, nao o objeto de dominio
+    original da emissao - por isso o MDF-e e **reconstruido a partir do XML
+    assinado ja arquivado** (`RetencaoDocumentoFiscalService`, FIS-26/34) via
+    o novo `MdfeXmlParser` (`documento.mdfe`), a mesma tecnica ja usada pelo
+    `CteConsultaController.notasFiscaisTransportadas` (FIS-44) para nao
+    duplicar estado em outra tabela. Coberto por `MdfeXmlParserTest`
+    (round-trip contra o proprio `MdfeXmlGenerator`).
+
 ## Emissao, consulta, encerramento e cancelamento de MDF-e (FIS-19/FIS-45)
 
 MDF-e (modelo 58) tem dominio, mapeamento e schema JSON proprios, mesmo

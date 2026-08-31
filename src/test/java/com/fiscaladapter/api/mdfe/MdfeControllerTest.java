@@ -89,7 +89,8 @@ class MdfeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
                 .andExpect(jsonPath("$.autorizada").value(true))
-                .andExpect(jsonPath("$.numeroProtocolo").value("935260000000001"));
+                .andExpect(jsonPath("$.numeroProtocolo").value("935260000000001"))
+                .andExpect(jsonPath("$.damdfePdfBase64").isNotEmpty());
     }
 
     @Test

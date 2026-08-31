@@ -130,7 +130,8 @@ class MdfeConsultaControllerTest {
                         .param("codigoMunicipioEncerramento", "3304557")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.encerrado").value(true));
+                .andExpect(jsonPath("$.encerrado").value(true))
+                .andExpect(jsonPath("$.damdfePdfBase64").isNotEmpty());
     }
 
     @Test

@@ -7,6 +7,8 @@ import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.mdfe.Mdfe;
 import com.fiscaladapter.documento.mdfe.MdfeXmlGenerator;
 import com.fiscaladapter.documento.mdfe.MdfeXsdValidator;
+import com.fiscaladapter.documento.mdfe.damdfe.DadosImpressaoDamdfe;
+import com.fiscaladapter.documento.mdfe.damdfe.DamdfeGenerator;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.numeracao.NumeracaoSequencialService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
@@ -15,6 +17,9 @@ import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
 import com.fiscaladapter.sefaz.rejeicao.RejeicaoSefaz;
 import org.springframework.stereotype.Service;
+
+import java.time.OffsetDateTime;
+import java.util.Base64;
 
 /**
  * Pipeline de emissao do MDF-e (modelo 58, FIS-45): mapeamento ->
@@ -36,12 +41,13 @@ public class MdfeEmissaoService {
     private final MdfeAutorizacaoClient autorizacaoClient;
     private final NumeracaoSequencialService numeracaoSequencialService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private final DamdfeGenerator damdfeGenerator;
 
     public MdfeEmissaoService(MdfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                                ChaveAcessoService chaveAcessoService, MdfeXmlGenerator xmlGenerator,
                                AssinaturaXmlService assinaturaXmlService, MdfeXsdValidator xsdValidator,
                                MdfeAutorizacaoClient autorizacaoClient, NumeracaoSequencialService numeracaoSequencialService,
-                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService) {
+                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService, DamdfeGenerator damdfeGenerator) {
         this.mapper = mapper;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
@@ -51,6 +57,7 @@ public class MdfeEmissaoService {
         this.autorizacaoClient = autorizacaoClient;
         this.numeracaoSequencialService = numeracaoSequencialService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
+        this.damdfeGenerator = damdfeGenerator;
     }
 
     public MdfeResponse processar(MdfePedidoEmissaoRequest pedido, String clientId) {
@@ -81,8 +88,26 @@ public class MdfeEmissaoService {
                 ? CatalogoRejeicaoSefaz.classificar(autorizacao.codigoStatus(), autorizacao.motivo())
                 : null;
 
+        String damdfePdfBase64 = gerarDamdfeSePermitido(mdfe, chaveAcesso, autorizacao);
+
         return new MdfeResponse(chaveAcesso, xmlAssinado, autorizacao.autorizada(), autorizacao.codigoStatus(),
-                autorizacao.motivo(), autorizacao.numeroProtocolo(),
+                autorizacao.motivo(), autorizacao.numeroProtocolo(), damdfePdfBase64,
                 rejeicao != null ? rejeicao.mensagem() : null, rejeicao != null ? rejeicao.categoria() : null);
+    }
+
+    /** O DAMDFE so tem validade legal para acompanhar a viagem quando o MDF-e foi autorizado (FIS-49). */
+    private String gerarDamdfeSePermitido(Mdfe mdfe, String chaveAcesso, AutorizacaoResponse autorizacao) {
+        if (!autorizacao.autorizada()) {
+            return null;
+        }
+
+        OffsetDateTime dataHoraAutorizacao = autorizacao.dhRecbto() != null
+                ? OffsetDateTime.parse(autorizacao.dhRecbto())
+                : null;
+
+        DadosImpressaoDamdfe dados = DadosImpressaoDamdfe.deEmissao(autorizacao.numeroProtocolo(), dataHoraAutorizacao);
+
+        byte[] pdf = damdfeGenerator.gerar(mdfe, chaveAcesso, dados);
+        return Base64.getEncoder().encodeToString(pdf);
     }
 }

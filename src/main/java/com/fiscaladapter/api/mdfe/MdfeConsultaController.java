@@ -2,8 +2,13 @@ package com.fiscaladapter.api.mdfe;
 
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
+import com.fiscaladapter.documento.mdfe.Mdfe;
+import com.fiscaladapter.documento.mdfe.MdfeXmlParser;
+import com.fiscaladapter.documento.mdfe.damdfe.DadosImpressaoDamdfe;
+import com.fiscaladapter.documento.mdfe.damdfe.DamdfeGenerator;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
+import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.mdfe.EncerramentoResponse;
 import com.fiscaladapter.sefaz.mdfe.MdfeCancelamentoClient;
 import com.fiscaladapter.sefaz.mdfe.MdfeConsultaProtocoloClient;
@@ -24,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.Base64;
 
 /**
  * Endpoints pos-emissao de MDF-e: consulta de situacao, encerramento (fim
@@ -42,17 +49,23 @@ public class MdfeConsultaController {
     private final MdfeEncerramentoClient encerramentoClient;
     private final CertificadoEmissorService certificadoEmissorService;
     private final ChaveAcessoService chaveAcessoService;
+    private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private final DamdfeGenerator damdfeGenerator;
 
     public MdfeConsultaController(MdfeConsultaProtocoloClient consultaProtocoloClient,
                                    MdfeCancelamentoClient cancelamentoClient,
                                    MdfeEncerramentoClient encerramentoClient,
                                    CertificadoEmissorService certificadoEmissorService,
-                                   ChaveAcessoService chaveAcessoService) {
+                                   ChaveAcessoService chaveAcessoService,
+                                   RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
+                                   DamdfeGenerator damdfeGenerator) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.encerramentoClient = encerramentoClient;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
+        this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
+        this.damdfeGenerator = damdfeGenerator;
     }
 
     @PostMapping("/api/v1/mdfe/{chaveAcesso}/consulta")
@@ -85,14 +98,39 @@ public class MdfeConsultaController {
                                                               Authentication authentication) {
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
+        LocalDate dataDeEncerramento = dataEncerramento != null ? dataEncerramento : LocalDate.now();
         EncerramentoResponse resposta = encerramentoClient.encerrar(chaveAcesso, numeroProtocolo, uf,
-                codigoMunicipioEncerramento, dataEncerramento != null ? dataEncerramento : LocalDate.now(),
-                ambiente, certificado);
+                codigoMunicipioEncerramento, dataDeEncerramento, ambiente, certificado);
 
         RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.encerrado(), resposta.codigoStatus(), resposta.motivo());
+        String damdfePdfBase64 = resposta.encerrado()
+                ? gerarDamdfeDeEncerramento(chaveAcesso, numeroProtocolo, codigoMunicipioEncerramento, dataDeEncerramento)
+                : null;
+
         return ResponseEntity.ok(new EncerramentoMdfeResponse(
-                chaveAcesso, resposta.encerrado(), resposta.codigoStatus(), resposta.motivo(),
+                chaveAcesso, resposta.encerrado(), resposta.codigoStatus(), resposta.motivo(), damdfePdfBase64,
                 mensagem(rejeicao), categoria(rejeicao)));
+    }
+
+    /**
+     * Reimpressao do DAMDFE com a indicacao de encerramento (FIS-49, criterio de aceite 3) - o
+     * unico dado disponivel neste endpoint e a chave de acesso, entao o Mdfe original e
+     * reconstruido a partir do XML assinado ja arquivado na emissao (mesma tecnica do
+     * `CteConsultaController.notasFiscaisTransportadas`, reaproveitar em vez de duplicar estado).
+     */
+    private String gerarDamdfeDeEncerramento(String chaveAcesso, String numeroProtocoloAutorizacao,
+                                              String codigoMunicipioEncerramento, LocalDate dataEncerramento) {
+        RetencaoDocumentoFiscalService.DocumentoRecuperado documento = retencaoDocumentoFiscalService.recuperar(chaveAcesso)
+                .orElseThrow(() -> new IllegalStateException("MDF-e " + chaveAcesso + " nao encontrado no arquivamento legal"));
+
+        Mdfe mdfe = MdfeXmlParser.paraDominio(documento.xmlAssinado());
+        OffsetDateTime dataHoraAutorizacao = documento.dataEmissao().atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+
+        DadosImpressaoDamdfe dados = DadosImpressaoDamdfe.deEncerramento(
+                documento.numeroProtocolo(), dataHoraAutorizacao, codigoMunicipioEncerramento, dataEncerramento);
+
+        byte[] pdf = damdfeGenerator.gerar(mdfe, chaveAcesso, dados);
+        return Base64.getEncoder().encodeToString(pdf);
     }
 
     @PostMapping("/api/v1/mdfe/{chaveAcesso}/cancelamento")
