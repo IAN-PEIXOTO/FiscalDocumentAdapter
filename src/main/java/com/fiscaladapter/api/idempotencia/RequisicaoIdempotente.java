@@ -23,7 +23,7 @@ import java.time.Instant;
 @Entity
 @Table(
         name = "requisicao_idempotente",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"client_id", "chave"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"client_id", "tipo_operacao", "chave"})
 )
 public class RequisicaoIdempotente {
 
@@ -33,6 +33,11 @@ public class RequisicaoIdempotente {
 
     @Column(name = "client_id", nullable = false, length = 64)
     private String clientId;
+
+    /** Discrimina o endpoint/tipo de resposta (ex.: "NfeResponse", "NfceResponse") - sem isso, a
+     * mesma Idempotency-Key reusada entre endpoints diferentes colidiria (FIS-43). */
+    @Column(name = "tipo_operacao", nullable = false, length = 50)
+    private String tipoOperacao;
 
     @Column(nullable = false, length = 200)
     private String chave;
@@ -56,8 +61,9 @@ public class RequisicaoIdempotente {
         // JPA
     }
 
-    RequisicaoIdempotente(String clientId, String chave, Instant criadoEm, Instant expiraEm) {
+    RequisicaoIdempotente(String clientId, String tipoOperacao, String chave, Instant criadoEm, Instant expiraEm) {
         this.clientId = clientId;
+        this.tipoOperacao = tipoOperacao;
         this.chave = chave;
         this.status = StatusRequisicaoIdempotente.PROCESSANDO;
         this.criadoEm = criadoEm;

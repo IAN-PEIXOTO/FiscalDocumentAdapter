@@ -14,6 +14,7 @@ import com.fiscaladapter.sefaz.nfe.NfeCceClient;
 import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
 import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
+import com.fiscaladapter.sefaz.nfe.PrazoCancelamentoNfceExpiradoException;
 import com.fiscaladapter.sefaz.nfe.TipoManifestacaoDestinatario;
 import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
 import com.fiscaladapter.sefaz.rejeicao.CategoriaErroSefaz;
@@ -25,6 +26,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
+
 /**
  * Endpoints pos-emissao de NFe: consulta de situacao, cancelamento e carta de
  * correcao (FIS-51/FIS-55). O certificado e resolvido pelo CNPJ do emitente,
@@ -34,6 +38,10 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class NfeConsultaController {
+
+    private static final String MODELO_NFCE = "65";
+    /** Ajuste SINIEF 07/18 - alguns estados adotam prazo ainda menor, nunca maior (FIS-43). */
+    private static final Duration PRAZO_CANCELAMENTO_NFCE = Duration.ofMinutes(30);
 
     private final NfeConsultaProtocoloClient consultaProtocoloClient;
     private final NfeCancelamentoClient cancelamentoClient;
@@ -82,6 +90,10 @@ public class NfeConsultaController {
                                                               @RequestParam String justificativa,
                                                               Authentication authentication) {
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
+
+        if (MODELO_NFCE.equals(chaveAcessoService.modeloDocumento(chaveAcesso))) {
+            verificarPrazoDeCancelamentoDaNfce(chaveAcesso, uf, ambiente, certificadoCarregado);
+        }
 
         CancelamentoResponse resposta = cancelamentoClient.cancelar(
                 chaveAcesso, numeroProtocolo, justificativa, uf, ambiente, certificadoCarregado);
@@ -159,6 +171,27 @@ public class NfeConsultaController {
         return ResponseEntity.ok(new ManifestacaoNfeResponse(
                 chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
                 mensagem(rejeicao), categoria(rejeicao)));
+    }
+
+    /**
+     * NFC-e (modelo 65) so pode ser cancelada dentro do prazo legal (FIS-43) - consulta a
+     * SEFAZ para saber a data/hora real de autorizacao (nao confia num timestamp local, que
+     * poderia estar desatualizado ou nunca ter sido persistido com precisao de minutos) e
+     * bloqueia preventivamente se o prazo ja passou, em vez de gastar uma tentativa que a
+     * SEFAZ rejeitaria de qualquer forma. Se a consulta nao trouxer a data de autorizacao
+     * (caso raro), deixa a SEFAZ decidir no proprio cancelamento em vez de bloquear as cegas.
+     */
+    private void verificarPrazoDeCancelamentoDaNfce(String chaveAcesso, String uf, TipoAmbiente ambiente,
+                                                     CertificadoCarregado certificado) {
+        ConsultaProtocoloResponse situacao = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
+        if (situacao.dhRecbto() == null) {
+            return;
+        }
+
+        Duration tempoDesdeAAutorizacao = Duration.between(OffsetDateTime.parse(situacao.dhRecbto()), OffsetDateTime.now());
+        if (tempoDesdeAAutorizacao.compareTo(PRAZO_CANCELAMENTO_NFCE) > 0) {
+            throw new PrazoCancelamentoNfceExpiradoException(PRAZO_CANCELAMENTO_NFCE, tempoDesdeAAutorizacao);
+        }
     }
 
     private CertificadoCarregado carregarCertificado(String chaveAcesso, Authentication authentication) {

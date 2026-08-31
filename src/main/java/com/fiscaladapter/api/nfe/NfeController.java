@@ -39,7 +39,7 @@ public class NfeController {
                                                @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                Authentication authentication) {
         String clientId = authentication.getName();
-        NfeResponse resposta = idempotenciaService.executar(clientId, idempotencyKey, () ->
+        NfeResponse resposta = idempotenciaService.executar(clientId, idempotencyKey, NfeResponse.class, () ->
                 nfeEmissaoService.processar(documento, clientId));
 
         return ResponseEntity.ok(resposta);

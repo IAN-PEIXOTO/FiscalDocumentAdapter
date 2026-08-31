@@ -96,7 +96,8 @@ class NfeConsultaControllerTest {
     @Test
     void deveConsultarNfeERetornarSituacao() throws Exception {
         when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
-                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000001"));
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000001",
+                        "2026-03-15T10:00:00-03:00"));
 
         String accessToken = obterAccessToken();
 

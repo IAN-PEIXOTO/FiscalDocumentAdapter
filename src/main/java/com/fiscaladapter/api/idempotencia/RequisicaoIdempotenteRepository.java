@@ -6,7 +6,7 @@ import java.util.Optional;
 
 interface RequisicaoIdempotenteRepository extends JpaRepository<RequisicaoIdempotente, Long> {
 
-    Optional<RequisicaoIdempotente> findByClientIdAndChave(String clientId, String chave);
+    Optional<RequisicaoIdempotente> findByClientIdAndTipoOperacaoAndChave(String clientId, String tipoOperacao, String chave);
 
-    void deleteByClientIdAndChave(String clientId, String chave);
+    void deleteByClientIdAndTipoOperacaoAndChave(String clientId, String tipoOperacao, String chave);
 }

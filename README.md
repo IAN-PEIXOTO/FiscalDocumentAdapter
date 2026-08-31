@@ -250,6 +250,69 @@ de codigos de rejeicao para garantir alinhamento exato - ver FIS-39
 (mapeamento de rejeicoes reais vindas da SEFAZ) para quando isso for
 resolvido.
 
+## Emissao, consulta e cancelamento de NFC-e (FIS-17/FIS-43)
+
+A geracao do XML da NFC-e (modelo 65) e o QR Code (FIS-17) ja existiam
+(`NfeXmlGenerator`/`NfeXsdValidator` leem `tipoDocumento` e ja geram
+`mod=65` corretamente; `NfceQrCodeService`/`NfceQrCodeUrlRegistry` geram o
+conteudo do QR Code e resolvem a URL de consulta publica por UF/ambiente) -
+faltava o endpoint REST e a integracao com a autorizacao real da SEFAZ.
+
+- **`POST /api/v1/nfce`** (novo) - mesmo payload JSON da NFe
+  (`NfePedidoEmissaoRequest`; `infNFe.dest` opcional para consumidor nao
+  identificado, ja suportado desde o FIS-17). Pipeline: mapeamento -> RVN ->
+  certificado -> chave/XML/assinatura -> QR Code online inserido no XML ->
+  validacao XSD -> autorizacao **sincrona** (indSinc=1) -> numeracao ->
+  retencao. So o modo sincrono e implementado: e o unico usado na pratica
+  para NFC-e (lote de um unico documento - a SEFAZ rejeita indSinc=0 nesse
+  caso, cStat 452, desde a NT 2025.001) - "assincrona quando aplicavel" (AC1)
+  nunca se aplica a NFC-e por esse motivo, entao nao ha um modo assincrono
+  analogo ao `EmissaoAssincronaController` da NFe para a NFC-e.
+- **Consulta publica (usada no QR Code)**: e a URL por UF/ambiente ja
+  resolvida por `NfceQrCodeUrlRegistry`/`NfceQrCodeService` (FIS-17),
+  devolvida na resposta da emissao (`urlConsultaPublica`) - nao existe um
+  webservice SOAP separado para isso (cada UF expoe so um endpoint HTTP de
+  portal, nao SOAP). A consulta *autenticada* por chave de acesso (mTLS,
+  para o proprio emissor) continua sendo `GET`/`POST
+  /api/v1/nfe/{chaveAcesso}/consulta` - o mesmo endpoint ja usado pela NFe,
+  ja que `NfeConsultaProtocoloClient` e agnostico de modelo.
+- **Cancelamento dentro do prazo legal da NFC-e**: reusa `POST
+  /api/v1/nfe/{chaveAcesso}/cancelamento` (mesmo evento SOAP da NFe), mas
+  quando a chave de acesso e de uma NFC-e (`mod=65`, detectado via
+  `ChaveAcessoService.modeloDocumento`), o controller primeiro consulta a
+  SEFAZ para saber a data/hora real de autorizacao e bloqueia
+  (`422`) se ja passaram mais de **30 minutos** (Ajuste SINIEF 07/18, que
+  reduziu o prazo anterior de 24h - alguns estados adotam um prazo ainda
+  menor, nunca maior) - evita gastar uma tentativa que a SEFAZ rejeitaria de
+  qualquer forma.
+
+**NAO reusa `EmissaoNfeOrquestrador`** para a emissao: aquele orquestrador
+cai em contingencia SVC-AN e, por ultimo, EPEC quando o endpoint normal
+falha - ambos mecanismos **exclusivos da NFe**. A contingencia especifica da
+NFC-e e o modo offline (tpEmis=9, QR Code assinado localmente - ver
+`NfceQrCodeService.gerarConteudoOffline`, ja implementado desde o FIS-17),
+que exige decisao explicita do PDV (implica guardar o XML localmente e
+retransmitir depois) - fora do escopo deste card, registrado como debito
+tecnico (mesma natureza do FIS-30 para o EPEC da NFe). Por isso, aqui, uma
+falha de comunicacao com a SEFAZ propaga como erro (502) em vez de
+contingencia automatica.
+
+**Correcoes feitas ao longo do caminho, ao revisar o codigo reusado:**
+- `EmissaoNfeOrquestrador.prepararDocumento` tinha `TipoDocumentoFiscal.NFE`
+  fixo ao calcular a chave de acesso, em vez de ler `nfe.identificacao().tipoDocumento()`
+  (que o `NfeXmlGenerator` ja lia corretamente) - inofensivo enquanto so a
+  NFe usava esse orquestrador, mas geraria uma chave com `mod=55`
+  incompativel com o `mod=65` do XML se esse orquestrador algum dia
+  processasse NFC-e. Corrigido, com teste de regressao.
+- `IdempotenciaService`/`requisicao_idempotente` eram exclusivos da
+  `NfeResponse` (tipo fixo no codigo). Com a NFC-e reusando o mesmo
+  mecanismo de idempotencia, um client_id que reusasse a mesma
+  `Idempotency-Key` entre `POST /api/v1/nfe` e `POST /api/v1/nfce`
+  colidiria na mesma chave `(client_id, chave)` e receberia de volta a
+  resposta cacheada do outro endpoint. Generalizado (`Class<T>` +
+  `tipo_operacao` como parte da chave unica, migration V11) - coberto por
+  teste especifico de nao-colisao entre os dois endpoints.
+
 ## Mapeamento de codigos de rejeicao da SEFAZ (FIS-39)
 
 O cStat/xMotivo bruto da SEFAZ (ex.: `"539"` / `"Duplicidade de NF-e"`)

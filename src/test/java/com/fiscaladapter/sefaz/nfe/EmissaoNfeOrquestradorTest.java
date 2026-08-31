@@ -119,6 +119,21 @@ class EmissaoNfeOrquestradorTest {
                 .hasMessageContaining("EPEC");
     }
 
+    @Test
+    void chaveDeAcessoDeveRefletirOModeloRealDoDocumento() throws Exception {
+        // FIS-43: prepararDocumento tinha TipoDocumentoFiscal.NFE fixo, gerando mod=55 na chave
+        // mesmo para um documento com tipoDocumento=NFCE (cujo XML ja teria mod=65 corretamente).
+        NotaFiscalEletronica nfce = NotaFiscalEletronicaTestFixture.notaNfceSemDestinatario();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(AutorizacaoResponse.de("100", "Autorizado o uso da NF-e", "135260000000001", "2026-03-15T10:00:00-03:00"));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfce, certificado);
+
+        assertThat(resultado.chaveAcesso().substring(20, 22)).isEqualTo("65");
+    }
+
     private CertificadoCarregado certificadoDeTeste() throws Exception {
         char[] senha = "senha123".toCharArray();
         byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", senha,

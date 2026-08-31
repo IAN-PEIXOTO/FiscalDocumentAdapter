@@ -19,6 +19,7 @@ public class NfeConsultaProtocoloClient {
     private static final Pattern TAG_CSTAT = Pattern.compile("<cStat>(\\d+)</cStat>");
     private static final Pattern TAG_XMOTIVO = Pattern.compile("<xMotivo>(.*?)</xMotivo>");
     private static final Pattern TAG_NPROT = Pattern.compile("<nProt>(\\d+)</nProt>");
+    private static final Pattern TAG_DHRECBTO = Pattern.compile("<dhRecbto>(.*?)</dhRecbto>");
 
     private final SefazEndpointRegistry endpointRegistry;
     private final SefazHttpClientFactory httpClientFactory;
@@ -57,12 +58,14 @@ public class NfeConsultaProtocoloClient {
         Matcher matcherStat = TAG_CSTAT.matcher(respostaXml);
         Matcher matcherMotivo = TAG_XMOTIVO.matcher(respostaXml);
         Matcher matcherProtocolo = TAG_NPROT.matcher(respostaXml);
+        Matcher matcherDhRecbto = TAG_DHRECBTO.matcher(respostaXml);
         if (!matcherStat.find()) {
             throw new SefazComunicacaoException("Resposta de consulta sem cStat: " + respostaXml);
         }
         String cStat = matcherStat.group(1);
         String xMotivo = matcherMotivo.find() ? matcherMotivo.group(1) : "";
         String nProt = matcherProtocolo.find() ? matcherProtocolo.group(1) : null;
-        return ConsultaProtocoloResponse.de(cStat, xMotivo, nProt);
+        String dhRecbto = matcherDhRecbto.find() ? matcherDhRecbto.group(1) : null;
+        return ConsultaProtocoloResponse.de(cStat, xMotivo, nProt, dhRecbto);
     }
 }

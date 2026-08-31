@@ -2,7 +2,6 @@ package com.fiscaladapter.sefaz.nfe;
 
 import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
-import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
@@ -158,11 +157,14 @@ public class EmissaoNfeOrquestrador {
     }
 
     private DocumentoPreparado prepararDocumento(NotaFiscalEletronica nfe, CertificadoCarregado certificado, String tpEmis) {
+        // usa o tipoDocumento real (FIS-43) - antes tinha TipoDocumentoFiscal.NFE fixo, o que geraria
+        // uma chave de acesso com mod=55 mesmo para um documento cujo XML tem mod=65 (NfeXmlGenerator
+        // ja le tipoDocumento corretamente) se este orquestrador algum dia processasse NFC-e.
         String chaveAcesso = chaveAcessoService.gerar(
                 nfe.identificacao().uf(),
                 nfe.identificacao().dataEmissao(),
                 nfe.emitente().cnpjSemMascara(),
-                chaveAcessoService.modeloPara(TipoDocumentoFiscal.NFE),
+                chaveAcessoService.modeloPara(nfe.identificacao().tipoDocumento()),
                 nfe.identificacao().serie(),
                 nfe.identificacao().numero(),
                 Integer.parseInt(tpEmis)

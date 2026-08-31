@@ -34,6 +34,17 @@ class ChaveAcessoServiceTest {
     }
 
     @Test
+    void deveExtrairModeloDocumentoDaChaveDeAcesso() {
+        String chaveNfe = service.gerar("SP", LocalDate.of(2026, 3, 15), "12345678000199",
+                service.modeloPara(TipoDocumentoFiscal.NFE), 1, 42, 1, "10000001");
+        String chaveNfce = service.gerar("SP", LocalDate.of(2026, 3, 15), "12345678000199",
+                service.modeloPara(TipoDocumentoFiscal.NFCE), 1, 42, 1, "10000001");
+
+        assertThat(service.modeloDocumento(chaveNfe)).isEqualTo("55");
+        assertThat(service.modeloDocumento(chaveNfce)).isEqualTo("65");
+    }
+
+    @Test
     void deveRejeitarCodigoNumericoComTamanhoInvalido() {
         assertThatThrownBy(() -> service.gerar("SP", LocalDate.now(), "12345678000199", "55", 1, 1, 1, "123"))
                 .isInstanceOf(IllegalArgumentException.class);

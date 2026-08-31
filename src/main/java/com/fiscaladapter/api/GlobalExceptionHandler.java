@@ -9,6 +9,7 @@ import com.fiscaladapter.documento.nfe.XmlInvalidoException;
 import com.fiscaladapter.documento.nfe.rvn.RegraNegocioVioladaException;
 import com.fiscaladapter.numeracao.NumeracaoIndisponivelException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
+import com.fiscaladapter.sefaz.nfe.PrazoCancelamentoNfceExpiradoException;
 import com.fiscaladapter.seguranca.EmissorNaoAutorizadoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,6 +105,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NumeracaoIndisponivelException.class)
     public ResponseEntity<ErroResposta> tratar(NumeracaoIndisponivelException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(PrazoCancelamentoNfceExpiradoException.class)
+    public ResponseEntity<ErroResposta> tratar(PrazoCancelamentoNfceExpiradoException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErroResposta(e.getMessage()));
     }
 
     @ExceptionHandler(ConsultaDistribuicaoDfeMuitoFrequenteException.class)

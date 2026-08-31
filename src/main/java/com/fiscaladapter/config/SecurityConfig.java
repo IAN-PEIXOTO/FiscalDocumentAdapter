@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers("/health", "/actuator/health", "/actuator/info", "/api/versao",
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .requestMatchers("/api/v1/nfe", "/api/v1/nfe/**").hasAuthority("SCOPE_nfe")
+                        .requestMatchers("/api/v1/nfce", "/api/v1/nfce/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/webhook", "/api/v1/webhook/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/documentos/**").hasAuthority("SCOPE_nfe")

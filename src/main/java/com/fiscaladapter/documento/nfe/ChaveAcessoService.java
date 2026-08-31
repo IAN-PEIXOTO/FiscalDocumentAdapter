@@ -51,6 +51,11 @@ public class ChaveAcessoService {
         return chaveAcesso.substring(6, 20);
     }
 
+    /** Extrai o codigo de modelo (posicoes 20-21, ex.: "55" NFe, "65" NFCe) embutido na chave de acesso (FIS-43). */
+    public String modeloDocumento(String chaveAcesso) {
+        return chaveAcesso.substring(20, 22);
+    }
+
     public String modeloPara(TipoDocumentoFiscal tipo) {
         return switch (tipo) {
             case NFE -> "55";
