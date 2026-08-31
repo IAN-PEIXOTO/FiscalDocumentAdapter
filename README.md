@@ -33,6 +33,11 @@ Testes de ponta a ponta contra o ambiente de homologacao real da SEFAZ (com
 certificado digital valido e CNPJ cadastrado) nao estao incluidos aqui -
 exigem credenciais que so quem for rodar isso em homologacao de verdade tem.
 
+O teste de carga (`NfeEmissaoCargaTest`, FIS-41) fica fora do `./mvnw test`
+padrao (tag JUnit5 `carga`, mais lento e menos deterministico que a suite
+normal) - ver secao "Teste de carga e performance" para como rodar e os
+resultados documentados.
+
 ## Bibliotecas e ferramentas de apoio (FIS-22)
 
 Referencia do que este projeto efetivamente usa (ou deliberadamente nao usa)
@@ -322,6 +327,105 @@ Desconhecimento e Operacao nao Realizada - Ciencia da Operacao nao tem
 prazo/efeito fiscal proprio, mas a NFeDistribuicaoDFe nao informa qual
 manifestacao (se alguma) ja foi registrada para cada resumo, entao o
 adapter calcula a mesma data limite para todos os resumos devolvidos.
+
+## Teste de carga e performance (FIS-41)
+
+`NfeEmissaoCargaTest` (`src/test/java/com/fiscaladapter/carga`) simula picos
+de emissao simultanea de NFe contra o pipeline real da aplicacao
+(mapeamento -> RVN -> assinatura XML -> SOAP -> numeracao -> retencao),
+substituindo so o webservice da SEFAZ por um servidor SOAP local
+(`ServidorSoapDeTeste`, com um pool de threads de verdade - sem isso o
+servidor de teste serializaria as respostas numa unica thread e o teste
+mediria a serializacao do stub, nao o pipeline) com uma latencia artificial
+de 50ms por chamada, para aproximar (sem depender de) um ambiente de
+homologacao real. Dois cenarios, cada um imprime um relatorio no console:
+
+1. **Pico seguro** (55 requisicoes, concorrencia 20, dentro do limite de
+   taxa) - mede a latencia real do pipeline sob concorrencia.
+2. **Pico acima da capacidade configurada** (70 requisicoes num unico
+   minuto) - prova que o rate limit por client_id (`RateLimitFilter`, FIS-14)
+   e aplicado de fato sob carga concorrente, nao so em chamadas sequenciais.
+
+Fica fora do `./mvnw test`/`./mvnw verify` padrao (tag JUnit5 `carga`,
+`excludedGroups` no `maven-surefire-plugin`) por ser mais lento e menos
+deterministico (mede tempo de parede) que a suite normal. Rodar
+explicitamente:
+
+```bash
+./mvnw test -Dsurefire.excludedGroups= -Dtest=NfeEmissaoCargaTest
+```
+
+### Metricas documentadas (criterio de aceite 2)
+
+Ultima execucao nesta sessao (H2 em memoria, perfil dev, uma unica JVM local
+- ver limitacao abaixo):
+
+| Cenario | Requisicoes | Taxa de erro | Throughput | p50 | p95 | p99 |
+|---|---|---|---|---|---|---|
+| Pico seguro (concorrencia 20) | 55 | 0% | ~9,5 emissoes/s | 546 ms | 4916 ms | 4918 ms |
+| Pico acima da capacidade | 70 num 1 min | 10/70 (14%, todos HTTP 429) | ~46 emissoes/s | 382 ms | 730 ms | 741 ms |
+
+O achado mais importante nao e um numero isolado, e o formato da curva: **o
+throughput nao melhora ao dobrar a concorrencia** (testes exploratorios
+fora do arquivo final: ~18 emissoes/s em concorrencia 10, ~17 emissoes/s em
+concorrencia 20 - mesma faixa, latencia de cauda quase dobrando) - sinal
+classico de saturacao num recurso compartilhado, nao de capacidade elastica.
+No cenario "pico seguro" documentado acima, p50 e p95 distam quase 10x
+(546ms vs 4916ms), confirmando que uma fracao das requisicoes fica
+esperando por esse recurso em vez de processar em paralelo de verdade.
+
+**ATENCAO (limitacao conhecida, nao contornavel nesta sessao):** os numeros
+acima vem de H2 em memoria (perfil dev) numa unica JVM local, nao de
+Postgres real nem de infraestrutura de producao - servem como sinal
+*relativo* de onde o pipeline gasta tempo e onde a concorrencia degrada, nao
+como capacidade absoluta de producao. Rodar este mesmo teste (ou uma
+ferramenta de carga externa, tipo k6/Gatling, contra uma instancia real com
+Postgres) antes de qualquer compromisso de capacidade com stakeholders.
+
+### Gargalos identificados e debito tecnico (criterio de aceite 3)
+
+1. **Rate limit por client_id e o primeiro teto atingido na pratica**
+   (`RateLimitFilter`, FIS-14): 60 requisicoes/minuto, fixo no codigo, em
+   memoria (nao sobrevive a multiplas instancias da aplicacao - o proprio
+   javadoc da classe ja registrava isso). Debito tecnico: (a) tornar o
+   limite configuravel por client_id/plano em vez de uma constante global,
+   (b) migrar para um contador compartilhado (ex.: Redis) antes de rodar
+   mais de uma instancia da aplicacao atras de um load balancer - sem isso,
+   cada instancia aplicaria seu proprio limite de 60/min, multiplicando o
+   limite real pelo numero de instancias de forma nao intencional.
+
+2. **`SefazHttpClientFactory.criar` reconstroi o `SSLContext`/`KeyStore`
+   mTLS a cada chamada** a SEFAZ (`NfeAutorizacaoClient` chama `criar()` em
+   toda tentativa de autorizacao, nunca reusa) - trabalho de
+   crypto/parsing de certificado repetido desnecessariamente quando o
+   mesmo certificado emite varias notas em sequencia, contribuindo para a
+   degradacao de latencia sob concorrencia (contencao de CPU). Debito
+   tecnico: cachear o `HttpClient`/`SSLContext` por certificado
+   (invalidando quando o certificado for re-registrado via `POST
+   /api/v1/certificados`), em vez de reconstruir em toda emissao.
+
+3. **Pool de conexoes do banco no tamanho default do HikariCP** (10 -
+   nenhum profile define `maximum-pool-size` explicitamente): cada emissao
+   sincrona faz pelo menos 3 escritas (numeracao, idempotencia, retencao)
+   mais a leitura do certificado - acima de ~10 emissoes verdadeiramente
+   concorrentes, a fila de espera por conexao vira um gargalo visivel.
+   Debito tecnico: tornar o tamanho do pool configuravel por ambiente
+   (`application-prod.yml`/`application-homolog.yml`) e dimensionar contra
+   o volume esperado de producao - nao fixado agora por nao haver ainda um
+   numero real de volume esperado para calibrar contra.
+
+4. **Fila assincrona (FIS-25/30) processa em lotes pequenos e sequenciais**
+   (`EmissaoAssincronaWorker`, 5 jobs por poll, um poll por vez via
+   `@Scheduled`) - adequada para o volume atual, mas e o proximo teto
+   depois do rate limit se o volume de emissoes em fila crescer bastante.
+   Nao redesenhado agora (seria trabalho especulativo sem um numero real de
+   volume para justificar) - fica registrado como debito tecnico a
+   revisitar com metricas de producao reais.
+
+Nenhum destes foi corrigido nesta sessao: mudar qualquer um deles sem um
+numero real de volume de producao para calibrar contra seria otimizacao
+especulativa. O objetivo deste card era medir e identificar, nao redesenhar
+- ficam documentados aqui para quando o volume real justificar o trabalho.
 
 ## Processamento assincrono e webhook (FIS-25)
 

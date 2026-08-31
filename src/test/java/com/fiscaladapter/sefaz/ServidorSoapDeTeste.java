@@ -89,6 +89,11 @@ public final class ServidorSoapDeTeste implements AutoCloseable {
             exchange.close();
         });
 
+        // sem isso, com.sun.net.httpserver serializa todas as requisicoes numa unica thread
+        // (util para os testes de fluxo unico existentes, mas corromperia qualquer teste de
+        // concorrencia real - ver NfeEmissaoCargaTest, FIS-41 - fazendo parecer que o gargalo
+        // e o servidor SEFAZ simulado, quando na verdade seria so essa serializacao artificial).
+        servidor.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         servidor.start();
         return new ServidorSoapDeTeste(servidor);
     }
