@@ -92,7 +92,8 @@ class CteControllerTest {
                 .andExpect(jsonPath("$.chaveAcesso").isNotEmpty())
                 .andExpect(jsonPath("$.autorizada").value(true))
                 .andExpect(jsonPath("$.numeroProtocolo").value("135260000000001"))
-                .andExpect(jsonPath("$.notasFiscaisTransportadas[0]").value("35260112345678000199550010000000421000000019"));
+                .andExpect(jsonPath("$.notasFiscaisTransportadas[0]").value("35260112345678000199550010000000421000000019"))
+                .andExpect(jsonPath("$.dactePdfBase64").isNotEmpty());
     }
 
     @Test

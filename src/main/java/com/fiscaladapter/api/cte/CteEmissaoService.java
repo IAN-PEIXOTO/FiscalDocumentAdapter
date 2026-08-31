@@ -7,6 +7,8 @@ import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.cte.Cte;
 import com.fiscaladapter.documento.cte.CteXmlGenerator;
 import com.fiscaladapter.documento.cte.CteXsdValidator;
+import com.fiscaladapter.documento.cte.dacte.DacteGenerator;
+import com.fiscaladapter.documento.cte.dacte.DadosImpressaoDacte;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.numeracao.NumeracaoSequencialService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
@@ -15,6 +17,9 @@ import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
 import com.fiscaladapter.sefaz.rejeicao.RejeicaoSefaz;
 import org.springframework.stereotype.Service;
+
+import java.time.OffsetDateTime;
+import java.util.Base64;
 
 /**
  * Pipeline de emissao do CT-e (modelo 57, FIS-44): mapeamento -> certificado
@@ -41,12 +46,13 @@ public class CteEmissaoService {
     private final CteAutorizacaoClient autorizacaoClient;
     private final NumeracaoSequencialService numeracaoSequencialService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private final DacteGenerator dacteGenerator;
 
     public CteEmissaoService(CteRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                               ChaveAcessoService chaveAcessoService, CteXmlGenerator xmlGenerator,
                               AssinaturaXmlService assinaturaXmlService, CteXsdValidator xsdValidator,
                               CteAutorizacaoClient autorizacaoClient, NumeracaoSequencialService numeracaoSequencialService,
-                              RetencaoDocumentoFiscalService retencaoDocumentoFiscalService) {
+                              RetencaoDocumentoFiscalService retencaoDocumentoFiscalService, DacteGenerator dacteGenerator) {
         this.mapper = mapper;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
@@ -56,6 +62,7 @@ public class CteEmissaoService {
         this.autorizacaoClient = autorizacaoClient;
         this.numeracaoSequencialService = numeracaoSequencialService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
+        this.dacteGenerator = dacteGenerator;
     }
 
     public CteResponse processar(CtePedidoEmissaoRequest pedido, String clientId) {
@@ -86,9 +93,27 @@ public class CteEmissaoService {
                 ? CatalogoRejeicaoSefaz.classificar(autorizacao.codigoStatus(), autorizacao.motivo())
                 : null;
 
+        String dactePdfBase64 = gerarDacteSePermitido(cte, chaveAcesso, autorizacao);
+
         return new CteResponse(chaveAcesso, xmlAssinado, autorizacao.autorizada(), autorizacao.codigoStatus(),
                 autorizacao.motivo(), autorizacao.numeroProtocolo(),
-                cte.notasFiscaisTransportadas().stream().map(n -> n.chaveAcesso()).toList(),
+                cte.notasFiscaisTransportadas().stream().map(n -> n.chaveAcesso()).toList(), dactePdfBase64,
                 rejeicao != null ? rejeicao.mensagem() : null, rejeicao != null ? rejeicao.categoria() : null);
+    }
+
+    /** O DACTE so tem validade legal para acompanhar a carga quando o CT-e foi autorizado (FIS-48). */
+    private String gerarDacteSePermitido(Cte cte, String chaveAcesso, AutorizacaoResponse autorizacao) {
+        if (!autorizacao.autorizada()) {
+            return null;
+        }
+
+        OffsetDateTime dataHoraAutorizacao = autorizacao.dhRecbto() != null
+                ? OffsetDateTime.parse(autorizacao.dhRecbto())
+                : null;
+
+        DadosImpressaoDacte dados = new DadosImpressaoDacte(autorizacao.numeroProtocolo(), dataHoraAutorizacao);
+
+        byte[] pdf = dacteGenerator.gerar(cte, chaveAcesso, dados);
+        return Base64.getEncoder().encodeToString(pdf);
     }
 }

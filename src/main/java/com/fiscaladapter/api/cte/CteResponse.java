@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * mensagemErro/categoriaErro vem nulos quando autorizada=true (FIS-39, mesmo padrao do NfeResponse).
  * notasFiscaisTransportadas (FIS-44, criterio de aceite 3) - as chaves de NF-e vinculadas a este
- * CT-e, ecoadas de volta do proprio pedido (nao ha DANFE/DACTE aqui - impressao fica para o FIS-48).
+ * CT-e, ecoadas de volta do proprio pedido.
+ * dactePdfBase64 vem nulo quando o CT-e foi rejeitado (mesma logica do NfeResponse - FIS-48).
  */
 public record CteResponse(
         String chaveAcesso,
@@ -17,6 +18,7 @@ public record CteResponse(
         String motivoSefaz,
         String numeroProtocolo,
         List<String> notasFiscaisTransportadas,
+        String dactePdfBase64,
         String mensagemErro,
         CategoriaErroSefaz categoriaErro
 ) {

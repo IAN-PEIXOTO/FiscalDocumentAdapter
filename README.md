@@ -350,6 +350,29 @@ Reusa o modelo de dominio da NFe (`NotaFiscalEletronica`/`ItemNota`), ja que a
 NFC-e (FIS-43) reaproveita o mesmo mapeamento (`NfeRequestMapper`) - nao ha um
 modelo de dominio `Nfce` separado.
 
+## Geracao do DACTE (FIS-48)
+
+`POST /api/v1/cte` agora devolve `dactePdfBase64` (nulo quando o CT-e foi
+rejeitado, mesma logica do `danfePdfBase64` da NFe/NFC-e) - um DACTE em PDF,
+gerado por `DacteGenerator` (`com.fiscaladapter.documento.cte.dacte`), no
+mesmo padrao do `DanfeGenerator` da NFe (FIS-8): A4 retrato, blocos de texto
+por secao, codigo de barras Code128 da chave de acesso (AC2).
+
+- **Layout conforme o manual do DACTE** (AC1): identificacao do CT-e +
+  chave, emitente/transportador, remetente, destinatario, percurso (origem e
+  destino, municipio/UF, dado ja existente em `IdentificacaoCte`), RNTRC,
+  informacao da carga (produto predominante, valor, peso bruto) e valores da
+  prestacao (valor total, valor a receber, base/aliquota/valor do ICMS).
+- **Suporte aos diferentes modais de transporte no layout** (AC3): o dominio
+  `Cte` (FIS-18/FIS-44) so implementa emissao no modal **rodoviario** -
+  outros modais (aereo, aquaviario, ferroviario, dutoviario, multimodal)
+  exigem grupos XML proprios que ainda nao existem no dominio (mesma
+  limitacao ja documentada no javadoc de `Cte.java`). O DACTE imprime o modal
+  como cabecalho fixo ("Modal: Rodoviario") e o RNTRC (dado obrigatorio
+  apenas nesse modal); dar suporte real aos demais modais fica registrado
+  como debito tecnico condicionado a evoluir o dominio primeiro - nao da
+  para "suportar no layout" um modal para o qual a emissao nem gera dados.
+
 ## Emissao, consulta e cancelamento de CT-e (FIS-44)
 
 CT-e (modelo 57) tem dominio, mapeamento e schema JSON proprios - diferente
