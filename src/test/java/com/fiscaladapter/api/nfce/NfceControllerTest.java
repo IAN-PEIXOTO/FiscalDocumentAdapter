@@ -97,7 +97,7 @@ class NfceControllerTest {
     }
 
     @Test
-    void deveEmitirNfceSemDestinatarioComQrCodeESemDanfe() throws Exception {
+    void deveEmitirNfceSemDestinatarioComQrCodeEDanfe() throws Exception {
         String accessToken = obterAccessToken();
 
         mockMvc.perform(post("/api/v1/nfce")
@@ -111,6 +111,7 @@ class NfceControllerTest {
                 .andExpect(jsonPath("$.numeroProtocolo").value("135260000000001"))
                 .andExpect(jsonPath("$.conteudoQrCode").isNotEmpty())
                 .andExpect(jsonPath("$.urlConsultaPublica").value("https://www.homologacao.nfce.fazenda.sp.gov.br/qrcode"))
+                .andExpect(jsonPath("$.danfePdfBase64").isNotEmpty())
                 .andExpect(jsonPath("$.xmlAssinado", org.hamcrest.Matchers.containsString("infNFeSupl")));
     }
 

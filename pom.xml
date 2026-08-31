@@ -84,6 +84,20 @@
             <version>1.3.42</version>
         </dependency>
 
+        <!-- Geracao de QR Code (DANFE NFC-e, FIS-47) - OpenPDF so tem codigos de barra 1D
+             (Code128 etc.), nao 2D. ZXing e a biblioteca de referencia (Apache 2.0, mesma
+             usada pela imensa maioria das implementacoes de referencia de NFC-e). -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+
         <!-- Banco de dados: H2 em memoria em dev/teste (application.yml), Postgres
              em homolog/producao (application-homolog.yml/application-prod.yml -
              FIS-26/32). As duas dependencias de banco convivem porque o profile

@@ -8,6 +8,8 @@ import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfce.NfceQrCodeService;
 import com.fiscaladapter.documento.nfce.NfceQrCodeUrlRegistry;
+import com.fiscaladapter.documento.nfce.danfe.DadosImpressaoDanfeNfce;
+import com.fiscaladapter.documento.nfce.danfe.DanfeNfceGenerator;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
@@ -20,6 +22,9 @@ import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
 import com.fiscaladapter.sefaz.rejeicao.RejeicaoSefaz;
 import org.springframework.stereotype.Service;
+
+import java.time.OffsetDateTime;
+import java.util.Base64;
 
 /**
  * Pipeline de emissao da NFC-e (modelo 65, FIS-43): mapeamento -> RVN ->
@@ -56,6 +61,7 @@ public class NfceEmissaoService {
     private final NfeAutorizacaoClient autorizacaoClient;
     private final NumeracaoSequencialService numeracaoSequencialService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private final DanfeNfceGenerator danfeNfceGenerator;
 
     public NfceEmissaoService(NfeRequestMapper mapper, RegraNegocioService regraNegocioService,
                                CertificadoEmissorService certificadoEmissorService, ChaveAcessoService chaveAcessoService,
@@ -63,7 +69,8 @@ public class NfceEmissaoService {
                                NfeXsdValidator xsdValidator, NfceQrCodeService qrCodeService,
                                NfceQrCodeUrlRegistry qrCodeUrlRegistry, NfeAutorizacaoClient autorizacaoClient,
                                NumeracaoSequencialService numeracaoSequencialService,
-                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService) {
+                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
+                               DanfeNfceGenerator danfeNfceGenerator) {
         this.mapper = mapper;
         this.regraNegocioService = regraNegocioService;
         this.certificadoEmissorService = certificadoEmissorService;
@@ -76,6 +83,7 @@ public class NfceEmissaoService {
         this.autorizacaoClient = autorizacaoClient;
         this.numeracaoSequencialService = numeracaoSequencialService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
+        this.danfeNfceGenerator = danfeNfceGenerator;
     }
 
     public NfceResponse processar(NfePedidoEmissaoRequest documento, String clientId) {
@@ -115,8 +123,32 @@ public class NfceEmissaoService {
                 ? CatalogoRejeicaoSefaz.classificar(autorizacao.codigoStatus(), autorizacao.motivo())
                 : null;
 
+        String danfePdfBase64 = gerarDanfeSePermitido(nfce, chaveAcesso, autorizacao, conteudoQrCode, urlConsulta);
+
         return new NfceResponse(chaveAcesso, xmlComQrCode, autorizacao.autorizada(), autorizacao.codigoStatus(),
-                autorizacao.motivo(), autorizacao.numeroProtocolo(), conteudoQrCode, urlConsulta,
+                autorizacao.motivo(), autorizacao.numeroProtocolo(), conteudoQrCode, urlConsulta, danfePdfBase64,
                 rejeicao != null ? rejeicao.mensagem() : null, rejeicao != null ? rejeicao.categoria() : null);
+    }
+
+    /**
+     * Diferente da NFe (que tambem libera o DANFE via EPEC), a NFC-e nao tem
+     * contingencia automatica implementada aqui (ver javadoc da classe) -
+     * o cupom fiscal so e emitido quando efetivamente autorizada.
+     */
+    private String gerarDanfeSePermitido(NotaFiscalEletronica nfce, String chaveAcesso,
+                                          AutorizacaoResponse autorizacao, String conteudoQrCode, String urlConsulta) {
+        if (!autorizacao.autorizada()) {
+            return null;
+        }
+
+        OffsetDateTime dataHoraAutorizacao = autorizacao.dhRecbto() != null
+                ? OffsetDateTime.parse(autorizacao.dhRecbto())
+                : null;
+
+        DadosImpressaoDanfeNfce dados = new DadosImpressaoDanfeNfce(
+                false, autorizacao.numeroProtocolo(), dataHoraAutorizacao, conteudoQrCode, urlConsulta);
+
+        byte[] pdf = danfeNfceGenerator.gerar(nfce, chaveAcesso, dados);
+        return Base64.getEncoder().encodeToString(pdf);
     }
 }

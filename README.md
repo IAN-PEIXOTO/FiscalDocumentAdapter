@@ -313,6 +313,43 @@ contingencia automatica.
   `tipo_operacao` como parte da chave unica, migration V11) - coberto por
   teste especifico de nao-colisao entre os dois endpoints.
 
+## Geracao do DANFE NFC-e (FIS-47)
+
+`POST /api/v1/nfce` agora devolve `danfePdfBase64` (nulo quando a NFC-e foi
+rejeitada, mesma logica do `danfePdfBase64` da NFe) - um DANFE NFC-e (modelo
+65) em PDF, gerado por `DanfeNfceGenerator`
+(`com.fiscaladapter.documento.nfce.danfe`).
+
+Diferente do `DanfeGenerator` da NFe (A4 retrato/paisagem, tabela de itens em
+grade), o DANFE NFC-e segue o formato "cupom", pensado para impressoras
+termicas de bobina continua:
+
+- **Largura fixa de 80mm** (`226.772pt`), o padrao mais comum de impressora
+  termica de PDV no Brasil (a outra largura comum, 58mm, ficou fora de
+  escopo). Altura fixa e generosa (`3000pt`) porque o OpenPDF exige uma
+  dimensao numerica de pagina - uma bobina continua nao tem "fim de pagina"
+  real, entao isso e uma aproximacao deliberada, nao uma replica exata de uma
+  impressora fisica especifica.
+- **QR Code de consulta publica embutido** (AC2): o conteudo (`conteudoQrCode`,
+  ja calculado por `NfceQrCodeService.gerarConteudoOnline` no pipeline de
+  emissao do FIS-43) e renderizado como imagem via **ZXing**
+  (`com.google.zxing:core`/`:javase`, novas dependencias) -
+  `QRCodeWriter.encode` -> `BitMatrix` -> `MatrixToImageWriter.toBufferedImage`
+  -> PNG -> `com.lowagie.text.Image`. O OpenPDF (ja usado no DANFE da NFe) so
+  gera codigos de barra 1D (`Barcode128`), nao QR Code, daí a dependencia
+  adicional.
+- **Indicacao de contingencia** (AC3): mesmo padrao visual do DANFE da NFe
+  (aviso em destaque, vermelho) quando `contingencia=true`. Na pratica esse
+  campo sempre chega `false` no pipeline atual, ja que a NFC-e so gera DANFE
+  para documento efetivamente autorizado (ver FIS-43: a contingencia offline
+  da NFC-e - tpEmis=9 - fica registrada como debito tecnico, nao
+  implementada) - o suporte a exibicao fica pronto para quando esse modo for
+  implementado.
+
+Reusa o modelo de dominio da NFe (`NotaFiscalEletronica`/`ItemNota`), ja que a
+NFC-e (FIS-43) reaproveita o mesmo mapeamento (`NfeRequestMapper`) - nao ha um
+modelo de dominio `Nfce` separado.
+
 ## Emissao, consulta e cancelamento de CT-e (FIS-44)
 
 CT-e (modelo 57) tem dominio, mapeamento e schema JSON proprios - diferente
