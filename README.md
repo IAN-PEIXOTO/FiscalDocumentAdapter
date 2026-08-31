@@ -183,6 +183,38 @@ clientes de NFe - prova o fluxo completo (handshake mTLS + envelope SOAP +
 interpretacao da resposta) para as tres operacoes, sem depender de um
 webservice municipal real.
 
+## Representacao impressa da NFS-e (FIS-50)
+
+Como nao existe um DANFE nacional padrao para NFS-e (cada prefeitura pode
+exigir o proprio layout), a geracao segue o mesmo padrao de extensibilidade
+por municipio ja usado para o XML (`NfseXmlGeneratorRegistry`, FIS-20):
+
+- **`RepresentacaoImpressaNfseGenerator`** (`documento.nfse.impressao`) - a
+  interface de extensao. Cada layout implementa `gerar(...)` e
+  `suporta(codigoMunicipioIbge)`.
+- **`RepresentacaoImpressaNfseGeneratorRegistry`** - resolve, a partir do
+  codigo IBGE do municipio de prestacao, qual implementacao usar (a primeira
+  registrada que declarar suporte aquele municipio); sem nenhuma
+  customizada, cai no layout generico.
+- **`RepresentacaoImpressaNfseGenericaGenerator`** (criterio de aceite 1) -
+  layout generico em PDF (A4 retrato, mesmo estilo dos DANFE/DACTE/DAMDFE):
+  identificacao (RPS + numero/codigo de verificacao da NFS-e quando
+  autorizada), prestador, tomador (ou "consumidor nao identificado"),
+  discriminacao do servico e o bloco de valores/ISS (valor dos servicos,
+  deducoes, aliquota, valor do ISS, retencao na fonte, exigibilidade). O RPS
+  nao carrega razao social/endereco do **prestador** (so documento e
+  inscricao municipal - a prefeitura ja tem esse cadastro e o XSD ABRASF nao
+  exige repeti-lo no envio, diferente do tomador); o layout imprime o que o
+  dominio de fato tem.
+- **Municipios com layout customizado suportado (criterio de aceite 3):
+  nenhum ainda.** Todos os municipios usam o layout generico ate que a
+  demanda concreta de algum municipio especifico surja (mesmo principio do
+  `nfse-municipios.properties` do FIS-20: comeca vazio, cresce sob demanda).
+  Para adicionar um layout customizado: implementar
+  `RepresentacaoImpressaNfseGenerator`, registrar como `@Component` (entra
+  automaticamente no registry) e declarar os municipios suportados em
+  `suporta(...)`.
+
 ## Numeracao sequencial de documentos fiscais (FIS-23)
 
 `NumeracaoSequencialService` (pacote `numeracao`) garante que o numero de um
