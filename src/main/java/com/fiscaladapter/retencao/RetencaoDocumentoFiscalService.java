@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 /** Arquiva e recupera o XML assinado de documentos fiscais autorizados, para retencao legal (FIS-26/34). */
@@ -43,6 +44,23 @@ public class RetencaoDocumentoFiscalService {
                 documento.getNumeroProtocolo(),
                 criptografiaEmRepousoService.descriptografar(documento.getXmlAssinadoCriptografado()),
                 documento.getDataEmissao()));
+    }
+
+    /**
+     * Todos os documentos de um tipo arquivados por um emissor (ex.: todos os MDF-e de uma
+     * transportadora) - usado para varrer vinculos entre documentos que a SEFAZ nao expoe na
+     * consulta de situacao (ex.: FIS-53, saber se um CT-e ja foi manifestado em algum MDF-e).
+     */
+    public List<DocumentoRecuperado> recuperarPorEmissorETipo(String cnpjEmissor, TipoDocumentoFiscal tipoDocumento) {
+        return repository.findByCnpjEmissorAndTipoDocumento(cnpjEmissor, tipoDocumento).stream()
+                .map(documento -> new DocumentoRecuperado(
+                        documento.getChaveAcesso(),
+                        documento.getCnpjEmissor(),
+                        documento.getTipoDocumento(),
+                        documento.getNumeroProtocolo(),
+                        criptografiaEmRepousoService.descriptografar(documento.getXmlAssinadoCriptografado()),
+                        documento.getDataEmissao()))
+                .toList();
     }
 
     public record DocumentoRecuperado(String chaveAcesso, String cnpjEmissor, TipoDocumentoFiscal tipoDocumento,

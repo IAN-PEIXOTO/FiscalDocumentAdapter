@@ -2,11 +2,13 @@ package com.fiscaladapter.api.cte;
 
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.cte.CteCancelamentoClient;
 import com.fiscaladapter.sefaz.cte.CteConsultaProtocoloClient;
+import com.fiscaladapter.sefaz.cte.CteJaManifestadoEmMdfeException;
 import com.fiscaladapter.sefaz.cte.PrazoCancelamentoCteExpiradoException;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
@@ -37,6 +39,7 @@ import java.util.regex.Pattern;
 public class CteConsultaController {
 
     private static final Pattern TAG_CHAVE_NFE = Pattern.compile("<infNFe>\\s*<chave>(\\d{44})</chave>\\s*</infNFe>");
+    private static final Pattern TAG_CHAVE_CTE_NO_MDFE = Pattern.compile("<infCTe>\\s*<chCTe>(\\d{44})</chCTe>\\s*</infCTe>");
     /** Ajuste SINIEF 09/07, clausula 14 - algumas UFs adotam prazo menor (FIS-44). */
     private static final Duration PRAZO_CANCELAMENTO_CTE = Duration.ofHours(168);
 
@@ -70,7 +73,7 @@ public class CteConsultaController {
         RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.autorizada(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new ConsultaCteResponse(
                 chaveAcesso, resposta.autorizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
-                notasFiscaisTransportadas(chaveAcesso), mensagem(rejeicao), categoria(rejeicao)));
+                notasFiscaisTransportadas(chaveAcesso), mdfeVinculado(chaveAcesso), mensagem(rejeicao), categoria(rejeicao)));
     }
 
     @PostMapping("/api/v1/cte/{chaveAcesso}/cancelamento")
@@ -83,6 +86,7 @@ public class CteConsultaController {
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         verificarPrazoDeCancelamento(chaveAcesso, uf, ambiente, certificado);
+        verificarSeJaManifestadoEmMdfe(chaveAcesso);
 
         CancelamentoResponse resposta = cancelamentoClient.cancelar(
                 chaveAcesso, numeroProtocolo, justificativa, uf, ambiente, certificado);
@@ -106,6 +110,34 @@ public class CteConsultaController {
                     return matcher.results().map(r -> r.group(1)).toList();
                 })
                 .orElse(List.of());
+    }
+
+    /**
+     * "Eventos vinculados" (FIS-53, criterio de aceite 1): varre os MDF-e ja arquivados por este
+     * adapter para o mesmo CNPJ emissor do CT-e (a transportadora e sempre a mesma nos dois
+     * documentos) procurando uma referencia a chave deste CT-e em infCTe/chCTe. A SEFAZ nao
+     * devolve esse vinculo na consulta de situacao do CT-e - so o proprio MDF-e sabe quais CT-e
+     * ele transporta.
+     */
+    private String mdfeVinculado(String chaveCte) {
+        String cnpjEmissor = chaveAcessoService.cnpjEmitente(chaveCte);
+        return retencaoDocumentoFiscalService.recuperarPorEmissorETipo(cnpjEmissor, TipoDocumentoFiscal.MDFE).stream()
+                .filter(mdfe -> TAG_CHAVE_CTE_NO_MDFE.matcher(mdfe.xmlAssinado()).results()
+                        .anyMatch(r -> r.group(1).equals(chaveCte)))
+                .map(RetencaoDocumentoFiscalService.DocumentoRecuperado::chaveAcesso)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Bloqueia o cancelamento se algum MDF-e ja manifestou este CT-e para transporte (FIS-53,
+     * criterio de aceite 2) - ver limitacao documentada em CteJaManifestadoEmMdfeException.
+     */
+    private void verificarSeJaManifestadoEmMdfe(String chaveCte) {
+        String chaveMdfe = mdfeVinculado(chaveCte);
+        if (chaveMdfe != null) {
+            throw new CteJaManifestadoEmMdfeException(chaveMdfe);
+        }
     }
 
     /**

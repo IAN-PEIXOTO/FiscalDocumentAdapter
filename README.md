@@ -445,6 +445,32 @@ via `TipoDocumentoFiscal.CTE`).
   devolve essa lista na consulta de situacao (so cStat/protocolo). Fica
   vazia se o CT-e consultado nao foi emitido por este adapter.
 
+## Vinculo entre CT-e e MDF-e na consulta e no cancelamento (FIS-53)
+
+`POST /api/v1/cte/{chaveAcesso}/consulta` agora tambem devolve
+`mdfeVinculado` - a chave do MDF-e que ja manifestou este CT-e para
+transporte, ou `null` se nenhum. A SEFAZ nao expoe esse vinculo na consulta
+de situacao do CT-e (so o proprio MDF-e sabe quais CT-e ele transporta) -
+por isso `CteConsultaController` varre os MDF-e ja arquivados por este
+adapter (`RetencaoDocumentoFiscalService.recuperarPorEmissorETipo`, novo
+metodo) para o mesmo CNPJ emissor do CT-e (a transportadora e sempre a
+mesma nos dois documentos), procurando uma referencia a chave do CT-e em
+`infCTe/chCTe` - mesma tecnica de regex sobre XML arquivado ja usada para
+`notasFiscaisTransportadas` (FIS-44) e para o `MdfeXmlParser` (FIS-49).
+
+`POST /api/v1/cte/{chaveAcesso}/cancelamento` agora bloqueia (HTTP 422,
+`CteJaManifestadoEmMdfeException`) quando `mdfeVinculado` nao e nulo -
+cancelar um CT-e que ja foi incluido num MDF-e deixaria o manifesto
+referenciando um documento inexistente perante o fisco; o procedimento
+correto e cancelar ou encerrar o MDF-e vinculado primeiro.
+
+**Limitacao conhecida:** o arquivamento legal (`DocumentoFiscalArquivado`)
+guarda so o XML autorizado, sem status de cancelamento - o bloqueio vale
+enquanto existir qualquer MDF-e autorizado que referencie o CT-e, mesmo que
+esse MDF-e tenha sido cancelado depois. Corrigir isso exigiria rastrear o
+status de cancelamento dos documentos arquivados, fora do escopo deste card
+(documentado tambem no javadoc de `CteJaManifestadoEmMdfeException`).
+
 **Estrutura SOAP diferente da NFe/NFC-e (verificado contra a implementacao
 de referencia nfephp-org/sped-cte, `Common/Tools.php`):** a autorizacao
 exige o XML **gzip+base64** dentro de `cteDadosMsg` (a NFe envia texto puro

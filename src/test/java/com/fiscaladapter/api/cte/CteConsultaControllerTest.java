@@ -5,7 +5,9 @@ import com.fiscaladapter.api.nfe.EmitRequest;
 import com.fiscaladapter.api.nfe.EnderecoNfeRequest;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.cte.TipoTomadorServico;
+import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.cte.CteAutorizacaoClient;
 import com.fiscaladapter.sefaz.cte.CteCancelamentoClient;
 import com.fiscaladapter.sefaz.cte.CteConsultaProtocoloClient;
@@ -14,8 +16,11 @@ import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
 import com.fiscaladapter.seguranca.ClienteApiService;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CteConsultaControllerTest {
 
     private static final String CNPJ_EMISSOR = "66777888000133";
@@ -59,6 +65,9 @@ class CteConsultaControllerTest {
 
     @Autowired
     private CertificadoEmissorService certificadoEmissorService;
+
+    @Autowired
+    private RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
 
     @MockBean
     private CteAutorizacaoClient autorizacaoClient;
@@ -99,6 +108,7 @@ class CteConsultaControllerTest {
     }
 
     @Test
+    @Order(1)
     void deveConsultarCteERetornarNotasFiscaisTransportadas() throws Exception {
         when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
                 .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso do CT-e", "135260000000001",
@@ -112,10 +122,60 @@ class CteConsultaControllerTest {
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.autorizada").value(true))
-                .andExpect(jsonPath("$.notasFiscaisTransportadas[0]").value(CHAVE_NFE_TRANSPORTADA));
+                .andExpect(jsonPath("$.notasFiscaisTransportadas[0]").value(CHAVE_NFE_TRANSPORTADA))
+                .andExpect(jsonPath("$.mdfeVinculado").doesNotExist());
     }
 
     @Test
+    @Order(4)
+    void deveRetornarMdfeVinculadoQuandoCteJaFoiManifestado() throws Exception {
+        when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso do CT-e", "135260000000001",
+                        "2026-03-15T10:00:00-03:00"));
+
+        String chaveMdfe = arquivarMdfeQueTransportaOCte();
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/cte/" + chaveAcessoCteEmitido + "/consulta")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mdfeVinculado").value(chaveMdfe));
+    }
+
+    @Test
+    @Order(5)
+    void deveBloquearCancelamentoDeCteJaManifestadoEmMdfe() throws Exception {
+        String dhRecbto = OffsetDateTime.now().minusHours(2).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso do CT-e", "135260000000001", dhRecbto));
+
+        arquivarMdfeQueTransportaOCte();
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/cte/" + chaveAcessoCteEmitido + "/cancelamento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "135260000000001")
+                        .param("justificativa", "Erro na contratacao do servico de transporte")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("ja manifestado no MDF-e")));
+    }
+
+    private String arquivarMdfeQueTransportaOCte() {
+        String chaveMdfe = "35260" + CNPJ_EMISSOR + "580010000000900" + "1" + "23456789";
+        String xmlMdfeFicticio = "<MDFe><infMDFe><infDoc><infMunDescarga>"
+                + "<infCTe><chCTe>" + chaveAcessoCteEmitido + "</chCTe></infCTe>"
+                + "</infMunDescarga></infDoc></infMDFe></MDFe>";
+        retencaoDocumentoFiscalService.arquivar(chaveMdfe, CNPJ_EMISSOR, TipoDocumentoFiscal.MDFE,
+                "935260000000001", xmlMdfeFicticio, LocalDate.of(2026, 3, 16));
+        return chaveMdfe;
+    }
+
+    @Test
+    @Order(2)
     void deveCancelarCteDentroDoPrazoDe168Horas() throws Exception {
         String dhRecbto = OffsetDateTime.now().minusHours(2).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
@@ -136,6 +196,7 @@ class CteConsultaControllerTest {
     }
 
     @Test
+    @Order(3)
     void deveRejeitarCancelamentoDeCteForaDoPrazoDe168Horas() throws Exception {
         String dhRecbto = OffsetDateTime.now().minusHours(170).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
