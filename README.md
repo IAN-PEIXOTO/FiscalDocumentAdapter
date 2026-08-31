@@ -245,6 +245,38 @@ de codigos de rejeicao para garantir alinhamento exato - ver FIS-39
 (mapeamento de rejeicoes reais vindas da SEFAZ) para quando isso for
 resolvido.
 
+## Mapeamento de codigos de rejeicao da SEFAZ (FIS-39)
+
+O cStat/xMotivo bruto da SEFAZ (ex.: `"539"` / `"Duplicidade de NF-e"`)
+continua sempre presente na resposta (fallback, criterio de aceite 3), mas
+`NfeResponse` (emissao), `ConsultaNfeResponse`, `CancelamentoNfeResponse`,
+`CceNfeResponse`, `InutilizacaoNfeResponse` e `ManifestacaoNfeResponse`
+ganharam dois campos novos, preenchidos so quando a operacao *nao* teve
+sucesso:
+
+- **`mensagemErro`** - versao clara e acionavel do erro (ou o proprio
+  `xMotivo` bruto, quando o codigo nao esta catalogado - nunca inventa uma
+  explicacao para um codigo desconhecido).
+- **`categoriaErro`** - `CORRIGIVEL_PELO_CLIENTE` (dado invalido/incompativel
+  no pedido - corrigir e reenviar), `TRANSITORIO` (falha do lado da SEFAZ -
+  servico parado ou documento ainda nao processado - tentar novamente tende
+  a resolver sozinho) ou `DESCONHECIDA` (codigo fora do catalogo).
+
+`CatalogoRejeicaoSefaz` (`com.fiscaladapter.sefaz.rejeicao`) cobre os cStat
+mais comuns na pratica (204, 215, 217, 225, 226, 234, 235, 241, 301, 302,
+539, 590, 656, 108, 109, 110, 999) - nao a tabela oficial completa (centenas
+de codigos, muitos raros ou especificos de CT-e/MDF-e/NFS-e). Descricoes
+conferidas contra a tabela publica mantida por `nfephp-org/sped-nfe`
+(biblioteca de referencia da comunidade de integradores NFe), ja que nao ha
+acesso direto ao PDF do MOC (Manual de Orientacao do Contribuinte) da SEFAZ
+nesta sessao - os codigos documentados abaixo sao consistentes entre
+multiplas fontes independentes consultadas.
+
+**NFe liberada via EPEC nao e tratada como rejeicao**: quando a NFe e
+liberada provisoriamente via EPEC (`viaEpec=true`), `autorizada` fica
+`false` mas isso nao e um erro do cliente - por isso `NfeEmissaoService` so
+consulta o catalogo quando `!autorizada && !viaEpec` (rejeicao de fato).
+
 ## Processamento assincrono e webhook (FIS-25)
 
 Nota: esta card descreve exatamente o que as cards FIS-30 (fila assincrona)

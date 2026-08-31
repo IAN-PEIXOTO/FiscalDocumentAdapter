@@ -15,6 +15,9 @@ import com.fiscaladapter.sefaz.nfe.NfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.nfe.NfeInutilizacaoClient;
 import com.fiscaladapter.sefaz.nfe.NfeManifestacaoDestinatarioClient;
 import com.fiscaladapter.sefaz.nfe.TipoManifestacaoDestinatario;
+import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
+import com.fiscaladapter.sefaz.rejeicao.CategoriaErroSefaz;
+import com.fiscaladapter.sefaz.rejeicao.RejeicaoSefaz;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,8 +68,10 @@ public class NfeConsultaController {
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificadoCarregado);
 
+        RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.autorizada(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new ConsultaNfeResponse(
-                chaveAcesso, resposta.autorizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
+                chaveAcesso, resposta.autorizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
+                mensagem(rejeicao), categoria(rejeicao)));
     }
 
     @PostMapping("/api/v1/nfe/{chaveAcesso}/cancelamento")
@@ -81,8 +86,10 @@ public class NfeConsultaController {
         CancelamentoResponse resposta = cancelamentoClient.cancelar(
                 chaveAcesso, numeroProtocolo, justificativa, uf, ambiente, certificadoCarregado);
 
+        RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.cancelado(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new CancelamentoNfeResponse(
-                chaveAcesso, resposta.cancelado(), resposta.codigoStatus(), resposta.motivo()));
+                chaveAcesso, resposta.cancelado(), resposta.codigoStatus(), resposta.motivo(),
+                mensagem(rejeicao), categoria(rejeicao)));
     }
 
     @PostMapping("/api/v1/nfe/{chaveAcesso}/cartaCorrecao")
@@ -97,8 +104,10 @@ public class NfeConsultaController {
         CceResponse resposta = cceClient.corrigir(
                 chaveAcesso, numeroSequencial, textoCorrecao, uf, ambiente, certificadoCarregado);
 
+        RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.registrada(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new CceNfeResponse(
-                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
+                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
+                mensagem(rejeicao), categoria(rejeicao)));
     }
 
     /**
@@ -121,8 +130,10 @@ public class NfeConsultaController {
         InutilizacaoResponse resposta = inutilizacaoClient.inutilizar(
                 cnpjEmitente, uf, serie, numeroInicial, numeroFinal, justificativa, ambiente, certificadoCarregado);
 
+        RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.inutilizada(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new InutilizacaoNfeResponse(
-                resposta.inutilizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
+                resposta.inutilizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
+                mensagem(rejeicao), categoria(rejeicao)));
     }
 
     /**
@@ -144,11 +155,26 @@ public class NfeConsultaController {
         ManifestacaoResponse resposta = manifestacaoDestinatarioClient.manifestar(
                 chaveAcesso, tipo, justificativa, ambiente, certificadoCarregado);
 
+        RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.registrada(), resposta.codigoStatus(), resposta.motivo());
         return ResponseEntity.ok(new ManifestacaoNfeResponse(
-                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo()));
+                chaveAcesso, resposta.registrada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
+                mensagem(rejeicao), categoria(rejeicao)));
     }
 
     private CertificadoCarregado carregarCertificado(String chaveAcesso, Authentication authentication) {
         return certificadoEmissorService.carregar(authentication.getName(), chaveAcessoService.cnpjEmitente(chaveAcesso));
+    }
+
+    /** Classifica (FIS-39) so quando a operacao nao teve sucesso - sucesso nao tem "erro" a explicar. */
+    private RejeicaoSefaz classificarSeNecessario(boolean sucesso, String codigoStatus, String motivo) {
+        return sucesso ? null : CatalogoRejeicaoSefaz.classificar(codigoStatus, motivo);
+    }
+
+    private String mensagem(RejeicaoSefaz rejeicao) {
+        return rejeicao != null ? rejeicao.mensagem() : null;
+    }
+
+    private CategoriaErroSefaz categoria(RejeicaoSefaz rejeicao) {
+        return rejeicao != null ? rejeicao.categoria() : null;
     }
 }

@@ -12,6 +12,8 @@ import com.fiscaladapter.numeracao.NumeracaoSequencialService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.nfe.EmissaoNfeOrquestrador;
 import com.fiscaladapter.sefaz.nfe.ResultadoEmissaoNfe;
+import com.fiscaladapter.sefaz.rejeicao.CatalogoRejeicaoSefaz;
+import com.fiscaladapter.sefaz.rejeicao.RejeicaoSefaz;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -76,10 +78,17 @@ public class NfeEmissaoService {
                     nfe.identificacao().dataEmissao());
         }
 
+        // so classifica como "rejeicao" uma negativa de fato - EPEC libera a nota provisoriamente
+        // (autorizada=false, mas nao e um erro do cliente nem exige nenhuma acao dele agora).
+        RejeicaoSefaz rejeicao = (!resultado.autorizacao().autorizada() && !resultado.viaEpec())
+                ? CatalogoRejeicaoSefaz.classificar(resultado.autorizacao().codigoStatus(), resultado.autorizacao().motivo())
+                : null;
+
         return new NfeResponse(resultado.chaveAcesso(), resultado.xmlAssinado(),
                 resultado.autorizacao().autorizada(), resultado.autorizacao().codigoStatus(),
                 resultado.autorizacao().motivo(), resultado.autorizacao().numeroProtocolo(),
-                resultado.viaContingencia(), resultado.viaEpec(), gerarDanfeSePermitido(nfe, resultado));
+                resultado.viaContingencia(), resultado.viaEpec(), gerarDanfeSePermitido(nfe, resultado),
+                rejeicao != null ? rejeicao.mensagem() : null, rejeicao != null ? rejeicao.categoria() : null);
     }
 
     /**

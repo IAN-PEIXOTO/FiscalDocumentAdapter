@@ -123,7 +123,27 @@ class NfeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.autorizada").value(false))
                 .andExpect(jsonPath("$.codigoStatusSefaz").value("539"))
-                .andExpect(jsonPath("$.danfePdfBase64").value(org.hamcrest.Matchers.nullValue()));
+                .andExpect(jsonPath("$.danfePdfBase64").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.categoriaErro").value("CORRIGIVEL_PELO_CLIENTE"))
+                .andExpect(jsonPath("$.mensagemErro").value(org.hamcrest.Matchers.containsString("chave de acesso diferente")));
+    }
+
+    @Test
+    void deveRetornarErroNaoCatalogadoComMotivoBrutoComoMensagemQuandoCodigoDesconhecido() throws Exception {
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenReturn(new AutorizacaoResponse("777", "Motivo bem especifico nunca visto antes", null, null, false));
+
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(104L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-rejeicao-desconhecida"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.autorizada").value(false))
+                .andExpect(jsonPath("$.categoriaErro").value("DESCONHECIDA"))
+                .andExpect(jsonPath("$.mensagemErro").value("Motivo bem especifico nunca visto antes"));
     }
 
     @Test
