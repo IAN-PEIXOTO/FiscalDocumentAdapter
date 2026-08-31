@@ -183,6 +183,44 @@ clientes de NFe - prova o fluxo completo (handshake mTLS + envelope SOAP +
 interpretacao da resposta) para as tres operacoes, sem depender de um
 webservice municipal real.
 
+## Cancelamento e consulta de status da NFS-e (FIS-56)
+
+O FIS-21 ja implementava `AbrasfNfseClient.cancelarNfse`/`consultarNfseRps`
+(comunicacao SOAP com a prefeitura), mas nao havia endpoint REST expondo
+essas duas operacoes para uma NFS-e ja emitida - so a geracao (FIS-20/21)
+estava acessivel via codigo, sem um controller. Este card fechou essa
+lacuna:
+
+- **`POST /api/v1/nfse/cancelamento`** (novo, criterio de aceite 1) -
+  `codigoIbgeMunicipio`, `numeroNfse`, `cpfCnpjPrestador`,
+  `inscricaoMunicipalPrestador` (opcional), `codigoMunicipioPrestacao`,
+  `ambiente`. Reaproveita `AbrasfNfseClient.cancelarNfse` sem alteracoes -
+  o processo especifico do padrao ABRASF (unico padrao com cliente de
+  comunicacao implementado) ja estava correto desde o FIS-21.
+- **`POST /api/v1/nfse/consulta`** (novo, criterio de aceite 2) - consulta
+  de status por municipio a partir da identificacao do RPS que originou a
+  NFS-e (`numeroRps`, `serieRps`, `cpfCnpjPrestador`), reaproveitando
+  `AbrasfNfseClient.consultarNfseRps`.
+- **Certificado resolvido pelo CPF/CNPJ do prestador** informado no
+  request (nao pela chave de acesso, como em NFe/CT-e/MDF-e - a NFS-e nao
+  tem esse conceito): `CertificadoEmissorService.carregar(clientId,
+  documentoPrestador)`, mesma garantia multi-tenant (FIS-10) dos demais
+  documentos.
+- **Mensagem clara quando o municipio nao suporta cancelamento
+  automatizado (criterio de aceite 3)**: `NfseEndpointRegistry` (FIS-21) ja
+  lancava `IllegalArgumentException` com uma mensagem explicita
+  ("Endpoint de NFS-e nao cadastrado para X - cadastre o endpoint da
+  prefeitura...") quando o municipio nao tem endpoint cadastrado -
+  `GlobalExceptionHandler` ja traduzia isso para HTTP 400 antes deste
+  card; so faltava um endpoint que chegasse ate esse ponto do codigo.
+  Provado ponta a ponta (sem mockar o `AbrasfNfseClient`) em
+  `NfseCancelamentoControllerMunicipioNaoSuportadoTest`.
+
+Nao ha catalogo de rejeicao (`CatalogoRejeicaoSefaz`, FIS-39) aqui - os
+codigos de erro da ABRASF variam por prefeitura (nao ha uma tabela nacional
+unica de motivos como a da SEFAZ estadual), entao o codigo/mensagem crus
+devolvidos pelo webservice municipal sao repassados como estao.
+
 ## Representacao impressa da NFS-e (FIS-50)
 
 Como nao existe um DANFE nacional padrao para NFS-e (cada prefeitura pode

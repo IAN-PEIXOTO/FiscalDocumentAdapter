@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/nfce", "/api/v1/nfce/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/cte", "/api/v1/cte/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/mdfe", "/api/v1/mdfe/**").hasAuthority("SCOPE_nfe")
+                        .requestMatchers("/api/v1/nfse", "/api/v1/nfse/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/certificados", "/api/v1/certificados/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/webhook", "/api/v1/webhook/**").hasAuthority("SCOPE_nfe")
                         .requestMatchers("/api/v1/documentos/**").hasAuthority("SCOPE_nfe")
