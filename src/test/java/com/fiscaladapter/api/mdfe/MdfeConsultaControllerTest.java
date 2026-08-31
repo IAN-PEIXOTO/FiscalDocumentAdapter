@@ -113,17 +113,47 @@ class MdfeConsultaControllerTest {
                         .param("ambiente", "HOMOLOGACAO")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.autorizada").value(true));
+                .andExpect(jsonPath("$.autorizada").value(true))
+                .andExpect(jsonPath("$.encerrado").value(false));
     }
 
     @Test
-    void deveEncerrarOManifesto() throws Exception {
-        when(encerramentoClient.encerrar(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(EncerramentoResponse.de("135", "Evento registrado e vinculado ao MDF-e"));
+    void deveRetornarDocumentosVinculadosNaConsulta() throws Exception {
+        when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso do MDF-e", "935260000000001",
+                        "2026-03-15T10:00:00-03:00"));
 
         String accessToken = obterAccessToken();
 
-        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeEmitido + "/encerramento")
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeEmitido + "/consulta")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chavesCteTransportados[0]").value("35260112345678000199570010000000421000000012"))
+                .andExpect(jsonPath("$.chavesNfeTransportadas[0]").value("35260112345678000199550010000000421000000019"));
+    }
+
+    /** Emite um MDF-e proprio (nao o compartilhado por @BeforeAll) para nao afetar os testes de cancelamento com o estado "encerrado". */
+    @Test
+    void deveEncerrarOManifestoEBloquearCancelamentoDepois() throws Exception {
+        String accessToken = obterAccessToken();
+        String respostaEmissao = mockMvc.perform(post("/api/v1/mdfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(951L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-mdfe-encerramento-setup"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String chaveAcessoMdfeParaEncerrar = objectMapper.readTree(respostaEmissao).get("chaveAcesso").asText();
+
+        when(encerramentoClient.encerrar(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(EncerramentoResponse.de("135", "Evento registrado e vinculado ao MDF-e"));
+        when(consultaProtocoloClient.consultar(any(), any(), any(), any()))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso do MDF-e", "935260000000001",
+                        "2026-03-15T10:00:00-03:00"));
+
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeParaEncerrar + "/encerramento")
                         .param("uf", "SP")
                         .param("ambiente", "HOMOLOGACAO")
                         .param("numeroProtocolo", "935260000000001")
@@ -132,6 +162,22 @@ class MdfeConsultaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.encerrado").value(true))
                 .andExpect(jsonPath("$.damdfePdfBase64").isNotEmpty());
+
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeParaEncerrar + "/consulta")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.encerrado").value(true));
+
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeParaEncerrar + "/cancelamento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "935260000000001")
+                        .param("justificativa", "Tentativa de cancelamento apos encerramento")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("MDF-e ja encerrado")));
     }
 
     @Test

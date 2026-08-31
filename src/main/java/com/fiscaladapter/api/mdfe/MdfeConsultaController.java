@@ -8,11 +8,13 @@ import com.fiscaladapter.documento.mdfe.damdfe.DadosImpressaoDamdfe;
 import com.fiscaladapter.documento.mdfe.damdfe.DamdfeGenerator;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
+import com.fiscaladapter.mdfe.MdfeEncerramentoRegistroService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.mdfe.EncerramentoResponse;
 import com.fiscaladapter.sefaz.mdfe.MdfeCancelamentoClient;
 import com.fiscaladapter.sefaz.mdfe.MdfeConsultaProtocoloClient;
 import com.fiscaladapter.sefaz.mdfe.MdfeEncerramentoClient;
+import com.fiscaladapter.sefaz.mdfe.MdfeJaEncerradoException;
 import com.fiscaladapter.sefaz.mdfe.PrazoCancelamentoMdfeExpiradoException;
 import com.fiscaladapter.sefaz.nfe.CancelamentoResponse;
 import com.fiscaladapter.sefaz.nfe.ConsultaProtocoloResponse;
@@ -51,6 +53,7 @@ public class MdfeConsultaController {
     private final ChaveAcessoService chaveAcessoService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
     private final DamdfeGenerator damdfeGenerator;
+    private final MdfeEncerramentoRegistroService encerramentoRegistroService;
 
     public MdfeConsultaController(MdfeConsultaProtocoloClient consultaProtocoloClient,
                                    MdfeCancelamentoClient cancelamentoClient,
@@ -58,7 +61,8 @@ public class MdfeConsultaController {
                                    CertificadoEmissorService certificadoEmissorService,
                                    ChaveAcessoService chaveAcessoService,
                                    RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
-                                   DamdfeGenerator damdfeGenerator) {
+                                   DamdfeGenerator damdfeGenerator,
+                                   MdfeEncerramentoRegistroService encerramentoRegistroService) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.encerramentoClient = encerramentoClient;
@@ -66,6 +70,7 @@ public class MdfeConsultaController {
         this.chaveAcessoService = chaveAcessoService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
         this.damdfeGenerator = damdfeGenerator;
+        this.encerramentoRegistroService = encerramentoRegistroService;
     }
 
     @PostMapping("/api/v1/mdfe/{chaveAcesso}/consulta")
@@ -78,9 +83,28 @@ public class MdfeConsultaController {
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
 
         RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.autorizada(), resposta.codigoStatus(), resposta.motivo());
+        DocumentosVinculados vinculados = documentosVinculados(chaveAcesso);
         return ResponseEntity.ok(new ConsultaMdfeResponse(
                 chaveAcesso, resposta.autorizada(), resposta.codigoStatus(), resposta.motivo(), resposta.numeroProtocolo(),
+                encerramentoRegistroService.estaEncerrado(chaveAcesso), vinculados.chavesCte(), vinculados.chavesNfe(),
                 mensagem(rejeicao), categoria(rejeicao)));
+    }
+
+    /**
+     * "Documentos vinculados" (FIS-54, criterio de aceite 3): extraidos do XML arquivado por este
+     * adapter na emissao, via MdfeXmlParser (FIS-49) - a SEFAZ nao devolve essa lista na consulta
+     * de situacao. Vazios se o MDF-e nao foi emitido por este adapter.
+     */
+    private DocumentosVinculados documentosVinculados(String chaveAcesso) {
+        return retencaoDocumentoFiscalService.recuperar(chaveAcesso)
+                .map(documento -> {
+                    Mdfe mdfe = MdfeXmlParser.paraDominio(documento.xmlAssinado());
+                    return new DocumentosVinculados(mdfe.chavesCteTransportados(), mdfe.chavesNfeTransportadas());
+                })
+                .orElse(new DocumentosVinculados(java.util.List.of(), java.util.List.of()));
+    }
+
+    private record DocumentosVinculados(java.util.List<String> chavesCte, java.util.List<String> chavesNfe) {
     }
 
     /**
@@ -103,9 +127,11 @@ public class MdfeConsultaController {
                 codigoMunicipioEncerramento, dataDeEncerramento, ambiente, certificado);
 
         RejeicaoSefaz rejeicao = classificarSeNecessario(resposta.encerrado(), resposta.codigoStatus(), resposta.motivo());
-        String damdfePdfBase64 = resposta.encerrado()
-                ? gerarDamdfeDeEncerramento(chaveAcesso, numeroProtocolo, codigoMunicipioEncerramento, dataDeEncerramento)
-                : null;
+        String damdfePdfBase64 = null;
+        if (resposta.encerrado()) {
+            encerramentoRegistroService.registrar(chaveAcesso, codigoMunicipioEncerramento, dataDeEncerramento);
+            damdfePdfBase64 = gerarDamdfeDeEncerramento(chaveAcesso, numeroProtocolo, codigoMunicipioEncerramento, dataDeEncerramento);
+        }
 
         return ResponseEntity.ok(new EncerramentoMdfeResponse(
                 chaveAcesso, resposta.encerrado(), resposta.codigoStatus(), resposta.motivo(), damdfePdfBase64,
@@ -142,6 +168,9 @@ public class MdfeConsultaController {
                                                               Authentication authentication) {
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
+        if (encerramentoRegistroService.estaEncerrado(chaveAcesso)) {
+            throw new MdfeJaEncerradoException();
+        }
         verificarPrazoDeCancelamento(chaveAcesso, uf, ambiente, certificado);
 
         CancelamentoResponse resposta = cancelamentoClient.cancelar(

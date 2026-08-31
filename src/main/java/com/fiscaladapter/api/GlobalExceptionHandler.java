@@ -11,6 +11,7 @@ import com.fiscaladapter.numeracao.NumeracaoIndisponivelException;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.sefaz.cte.CteJaManifestadoEmMdfeException;
 import com.fiscaladapter.sefaz.cte.PrazoCancelamentoCteExpiradoException;
+import com.fiscaladapter.sefaz.mdfe.MdfeJaEncerradoException;
 import com.fiscaladapter.sefaz.mdfe.PrazoCancelamentoMdfeExpiradoException;
 import com.fiscaladapter.sefaz.nfe.PrazoCancelamentoNfceExpiradoException;
 import com.fiscaladapter.seguranca.EmissorNaoAutorizadoException;
@@ -127,6 +128,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PrazoCancelamentoMdfeExpiradoException.class)
     public ResponseEntity<ErroResposta> tratar(PrazoCancelamentoMdfeExpiradoException e) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErroResposta(e.getMessage()));
+    }
+
+    @ExceptionHandler(MdfeJaEncerradoException.class)
+    public ResponseEntity<ErroResposta> tratar(MdfeJaEncerradoException e) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ErroResposta(e.getMessage()));
     }
 

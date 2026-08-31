@@ -510,6 +510,31 @@ documentos fiscais vinculados (CT-e/NF-e, AC1).
     duplicar estado em outra tabela. Coberto por `MdfeXmlParserTest`
     (round-trip contra o proprio `MdfeXmlGenerator`).
 
+## Documentos vinculados e bloqueio de cancelamento apos encerramento (FIS-54)
+
+A consulta e o encerramento com data/local ja existiam desde o FIS-45; este
+card cobriu as duas lacunas reais: "documentos vinculados" na consulta e o
+bloqueio de cancelamento apos o encerramento.
+
+- **Consulta retorna documentos vinculados (criterio de aceite 3)**: `POST
+  /api/v1/mdfe/{chaveAcesso}/consulta` agora tambem devolve
+  `chavesCteTransportados`/`chavesNfeTransportadas` - extraidos do XML
+  arquivado por este adapter na emissao via `MdfeXmlParser` (FIS-49), ja que
+  a SEFAZ nao devolve essa lista na consulta de situacao. Ficam vazias se o
+  MDF-e consultado nao foi emitido por este adapter.
+- **Cancelamento permitido apenas antes do encerramento (criterio de aceite
+  2)**: a SEFAZ nao expoe "encerrado" na consulta de situacao usada por
+  este adapter, entao o proprio encerramento precisa registrar esse fato -
+  novo `MdfeEncerramentoRegistroService` (pacote `mdfe`, tabela
+  `mdfe_encerramento`, migration V12) grava chave + municipio + data quando
+  `POST /api/v1/mdfe/{chaveAcesso}/encerramento` e aceito pela SEFAZ.
+  `POST /api/v1/mdfe/{chaveAcesso}/cancelamento` consulta esse registro
+  antes do prazo legal (24h, FIS-45) e bloqueia (HTTP 422,
+  `MdfeJaEncerradoException`) se o manifesto ja foi encerrado - cancelar
+  depois do encerramento nao faz sentido, o documento ja cumpriu seu
+  proposito perante o fisco. O mesmo `encerrado` tambem e devolvido na
+  consulta (`ConsultaMdfeResponse.encerrado`).
+
 ## Emissao, consulta, encerramento e cancelamento de MDF-e (FIS-19/FIS-45)
 
 MDF-e (modelo 58) tem dominio, mapeamento e schema JSON proprios, mesmo
