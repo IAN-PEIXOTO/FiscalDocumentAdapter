@@ -5,10 +5,7 @@ import com.fiscaladapter.api.nfe.NfeEmissaoService;
 import com.fiscaladapter.api.nfe.NfePedidoEmissaoRequest;
 import com.fiscaladapter.api.nfe.NfeResponse;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
-import com.fiscaladapter.seguranca.ClienteApiService;
 import com.fiscaladapter.seguranca.CriptografiaEmRepousoService;
-import com.fiscaladapter.webhook.WebhookEventoPayload;
-import com.fiscaladapter.webhook.WebhookNotifierService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +17,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Processa a fila de emissoes assincronas de NFe (FIS-25/FIS-30): poll
@@ -47,20 +43,18 @@ public class EmissaoAssincronaWorker {
     private final NfeEmissaoService nfeEmissaoService;
     private final ObjectMapper objectMapper;
     private final CriptografiaEmRepousoService criptografiaEmRepousoService;
-    private final ClienteApiService clienteApiService;
-    private final WebhookNotifierService webhookNotifierService;
+    private final WebhookNotificacaoAssincronaService webhookNotificacaoAssincronaService;
     private final TransactionTemplate transactionTemplate;
 
     public EmissaoAssincronaWorker(EmissaoAssincronaRepository repository, NfeEmissaoService nfeEmissaoService,
                                     ObjectMapper objectMapper, CriptografiaEmRepousoService criptografiaEmRepousoService,
-                                    ClienteApiService clienteApiService, WebhookNotifierService webhookNotifierService,
+                                    WebhookNotificacaoAssincronaService webhookNotificacaoAssincronaService,
                                     PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.nfeEmissaoService = nfeEmissaoService;
         this.objectMapper = objectMapper;
         this.criptografiaEmRepousoService = criptografiaEmRepousoService;
-        this.clienteApiService = clienteApiService;
-        this.webhookNotifierService = webhookNotifierService;
+        this.webhookNotificacaoAssincronaService = webhookNotificacaoAssincronaService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -99,14 +93,14 @@ public class EmissaoAssincronaWorker {
             falhar(jobId, erroTerminal);
         }
 
-        // FIS-87: fora do try/catch acima de proposito (o estado do job ja foi decidido e
-        // persistido em concluir/falhar) - mas uma falha inesperada aqui (ex.: erro ao montar o
-        // payload) nao pode propagar para processarPendentes() e interromper o processamento dos
-        // demais jobs do lote atual.
+        // FIS-79: assincrono (Executor dedicado) - nao segura esta thread do scheduler pelo
+        // tempo de entrega/retry do webhook (ate ~14s de backoff). FIS-87: qualquer falha na
+        // notificacao (inclusive erro ao despachar para o executor) fica isolada ali dentro e
+        // nao pode propagar para processarPendentes(), interrompendo o lote atual.
         try {
-            notificarWebhook(jobId, resultado, erroTerminal);
+            webhookNotificacaoAssincronaService.notificar(jobId, resultado, erroTerminal);
         } catch (Exception e) {
-            log.error("Falha inesperada ao notificar webhook da emissao assincrona {}", jobId, e);
+            log.error("Falha inesperada ao despachar notificacao de webhook da emissao assincrona {}", jobId, e);
         }
     }
 
@@ -151,33 +145,6 @@ public class EmissaoAssincronaWorker {
     private void falhar(Long jobId, String mensagemErro) {
         transactionTemplate.executeWithoutResult(status ->
                 repository.findById(jobId).ifPresent(job -> job.falhar(mensagemErro, Instant.now())));
-    }
-
-    private void notificarWebhook(Long jobId, NfeResponse resultado, String erro) {
-        String clientId = transactionTemplate.execute(status -> repository.findById(jobId).orElseThrow().getClientId());
-        String webhookUrl = clienteApiService.obterWebhookUrl(clientId);
-        if (webhookUrl == null) {
-            return;
-        }
-        String webhookSecret = clienteApiService.obterWebhookSecret(clientId);
-
-        WebhookEventoPayload payload = montarPayload(jobId, resultado, erro);
-        boolean entregue = webhookNotifierService.notificar(webhookUrl, webhookSecret, payload);
-        if (!entregue) {
-            log.warn("Webhook da emissao assincrona {} nao pode ser entregue - cliente pode consultar via GET /api/v1/nfe/assincrono/{}", jobId, jobId);
-        }
-        transactionTemplate.executeWithoutResult(status ->
-                repository.findById(jobId).ifPresent(job -> job.incrementarTentativaNotificacao(Instant.now())));
-    }
-
-    private WebhookEventoPayload montarPayload(Long jobId, NfeResponse resultado, String erro) {
-        String eventoId = UUID.randomUUID().toString();
-        if (erro != null) {
-            return new WebhookEventoPayload(eventoId, "nfe.falha", jobId, null, false, null, null, null, erro);
-        }
-        String tipo = resultado.autorizada() ? "nfe.autorizada" : "nfe.rejeitada";
-        return new WebhookEventoPayload(eventoId, tipo, jobId, resultado.chaveAcesso(), resultado.autorizada(),
-                resultado.codigoStatusSefaz(), resultado.motivoSefaz(), resultado.numeroProtocolo(), null);
     }
 
     private String serializar(NfeResponse resultado) {
