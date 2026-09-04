@@ -5,6 +5,7 @@ import com.fiscaladapter.seguranca.CriptografiaEmRepousoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -126,6 +127,20 @@ public class IdempotenciaService {
     private void removerPlaceholder(String clientId, String tipoOperacao, String chave) {
         transactionTemplate.executeWithoutResult(status ->
                 repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave));
+    }
+
+    /**
+     * Expurgo periodico das linhas expiradas (FIS-81) - roda a cada hora, independente do trafego
+     * de reenvios. Sem isso, a tabela cresce proporcionalmente ao volume historico total de
+     * operacoes ja processadas (o CLOB de resposta cifrada incluido), nao ao volume dentro da
+     * janela de 24h.
+     */
+    @Scheduled(fixedRateString = "${fiscaladapter.idempotencia.intervalo-expurgo-ms:3600000}")
+    public void expurgarExpiradas() {
+        Integer removidas = transactionTemplate.execute(status -> repository.expurgarExpiradasAntesDe(Instant.now()));
+        if (removidas != null && removidas > 0) {
+            log.info("Expurgadas {} requisicoes idempotentes expiradas", removidas);
+        }
     }
 
     private String serializar(Object resposta) {

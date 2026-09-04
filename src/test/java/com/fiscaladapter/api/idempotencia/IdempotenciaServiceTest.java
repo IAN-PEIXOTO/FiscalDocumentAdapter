@@ -55,4 +55,22 @@ class IdempotenciaServiceTest {
         assertThat(resultado).isEqualTo("reprocessado");
         assertThat(chamadas.get()).isEqualTo(1);
     }
+
+    /** FIS-81: expurgo periodico deve remover linhas expiradas, mas nunca as que ainda estao dentro da janela. */
+    @Test
+    void expurgarExpiradasDeveRemoverSoAsLinhasComJanelaVencida() {
+        String clientId = "cliente-idempotencia-3";
+        Instant agora = Instant.now();
+
+        RequisicaoIdempotente expirada = repository.save(new RequisicaoIdempotente(
+                clientId, TIPO_OPERACAO, "chave-expirada", agora.minus(IdempotenciaService.JANELA_VALIDADE).minusSeconds(60),
+                agora.minusSeconds(30)));
+        RequisicaoIdempotente aindaValida = repository.save(new RequisicaoIdempotente(
+                clientId, TIPO_OPERACAO, "chave-ainda-valida", agora, agora.plus(IdempotenciaService.JANELA_VALIDADE)));
+
+        service.expurgarExpiradas();
+
+        assertThat(repository.findById(expirada.getId())).isEmpty();
+        assertThat(repository.findById(aindaValida.getId())).isPresent();
+    }
 }
