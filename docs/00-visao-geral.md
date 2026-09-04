@@ -129,6 +129,15 @@ profiles Spring (`dev`/`homolog`/`prod`, `SPRING_PROFILES_ACTIVE`) — isso é i
 do campo `ambiente` do payload, que indica a qual ambiente **da SEFAZ** aquele documento
 específico deve ser transmitido.
 
+> **Validação de consistência (FIS-64)**: nos endpoints pós-emissão (consulta,
+> cancelamento, carta de correção, manifestação, encerramento), o `ambiente` informado é
+> conferido contra o `tpAmb` gravado no XML arquivado na emissão original — divergência
+> (ex.: pedir `ambiente=HOMOLOGACAO` para uma chave emitida em produção) é rejeitada com
+> HTTP 400 antes de qualquer chamada à SEFAZ. Essa checagem só é possível para documentos
+> emitidos por este próprio adapter (que arquiva o XML assinado); para uma chave de
+> terceiro, sem XML arquivado aqui, a checagem é pulada e a divergência só seria pega pela
+> própria SEFAZ.
+
 ## 5. Formato de erro padrão
 
 Toda resposta de erro segue o mesmo formato (`ErroResposta`):

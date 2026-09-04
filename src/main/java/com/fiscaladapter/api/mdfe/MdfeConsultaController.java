@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.mdfe;
 
+import com.fiscaladapter.api.AmbienteEmissaoValidator;
 import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
@@ -55,6 +56,7 @@ public class MdfeConsultaController {
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
     private final DamdfeGenerator damdfeGenerator;
     private final MdfeEncerramentoRegistroService encerramentoRegistroService;
+    private final AmbienteEmissaoValidator ambienteEmissaoValidator;
 
     public MdfeConsultaController(MdfeConsultaProtocoloClient consultaProtocoloClient,
                                    MdfeCancelamentoClient cancelamentoClient,
@@ -63,7 +65,8 @@ public class MdfeConsultaController {
                                    ChaveAcessoService chaveAcessoService,
                                    RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
                                    DamdfeGenerator damdfeGenerator,
-                                   MdfeEncerramentoRegistroService encerramentoRegistroService) {
+                                   MdfeEncerramentoRegistroService encerramentoRegistroService,
+                                   AmbienteEmissaoValidator ambienteEmissaoValidator) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.encerramentoClient = encerramentoClient;
@@ -72,6 +75,7 @@ public class MdfeConsultaController {
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
         this.damdfeGenerator = damdfeGenerator;
         this.encerramentoRegistroService = encerramentoRegistroService;
+        this.ambienteEmissaoValidator = ambienteEmissaoValidator;
     }
 
     @PostMapping("/api/v1/mdfe/{chaveAcesso}/consulta")
@@ -80,6 +84,7 @@ public class MdfeConsultaController {
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
@@ -125,6 +130,7 @@ public class MdfeConsultaController {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         ValidacaoParametros.exigirSomenteDigitos(codigoMunicipioEncerramento, "codigoMunicipioEncerramento");
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         LocalDate dataDeEncerramento = dataEncerramento != null ? dataEncerramento : LocalDate.now();
@@ -173,6 +179,7 @@ public class MdfeConsultaController {
                                                               Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         if (encerramentoRegistroService.estaEncerrado(chaveAcesso)) {

@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.nfe;
 
+import com.fiscaladapter.api.AmbienteEmissaoValidator;
 import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
@@ -51,6 +52,7 @@ public class NfeConsultaController {
     private final NfeManifestacaoDestinatarioClient manifestacaoDestinatarioClient;
     private final CertificadoEmissorService certificadoEmissorService;
     private final ChaveAcessoService chaveAcessoService;
+    private final AmbienteEmissaoValidator ambienteEmissaoValidator;
 
     public NfeConsultaController(NfeConsultaProtocoloClient consultaProtocoloClient,
                                   NfeCancelamentoClient cancelamentoClient,
@@ -58,7 +60,8 @@ public class NfeConsultaController {
                                   NfeInutilizacaoClient inutilizacaoClient,
                                   NfeManifestacaoDestinatarioClient manifestacaoDestinatarioClient,
                                   CertificadoEmissorService certificadoEmissorService,
-                                  ChaveAcessoService chaveAcessoService) {
+                                  ChaveAcessoService chaveAcessoService,
+                                  AmbienteEmissaoValidator ambienteEmissaoValidator) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.cceClient = cceClient;
@@ -66,6 +69,7 @@ public class NfeConsultaController {
         this.manifestacaoDestinatarioClient = manifestacaoDestinatarioClient;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
+        this.ambienteEmissaoValidator = ambienteEmissaoValidator;
     }
 
     @PostMapping("/api/v1/nfe/{chaveAcesso}/consulta")
@@ -74,6 +78,7 @@ public class NfeConsultaController {
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificadoCarregado);
@@ -93,6 +98,7 @@ public class NfeConsultaController {
                                                               Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         if (MODELO_NFCE.equals(chaveAcessoService.modeloDocumento(chaveAcesso))) {
@@ -116,6 +122,7 @@ public class NfeConsultaController {
                                                      @RequestParam String textoCorrecao,
                                                      Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         CceResponse resposta = cceClient.corrigir(
@@ -167,6 +174,7 @@ public class NfeConsultaController {
                                                                 @RequestParam(required = false) String justificativa,
                                                                 Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(
                 authentication.getName(), cnpjManifestante.replaceAll("\\D", ""));
 

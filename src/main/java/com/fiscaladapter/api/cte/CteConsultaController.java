@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.cte;
 
+import com.fiscaladapter.api.AmbienteEmissaoValidator;
 import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
@@ -49,19 +50,22 @@ public class CteConsultaController {
     private final ChaveAcessoService chaveAcessoService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
     private final MdfeCteVinculoService mdfeCteVinculoService;
+    private final AmbienteEmissaoValidator ambienteEmissaoValidator;
 
     public CteConsultaController(CteConsultaProtocoloClient consultaProtocoloClient,
                                   CteCancelamentoClient cancelamentoClient,
                                   CertificadoEmissorService certificadoEmissorService,
                                   ChaveAcessoService chaveAcessoService,
                                   RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
-                                  MdfeCteVinculoService mdfeCteVinculoService) {
+                                  MdfeCteVinculoService mdfeCteVinculoService,
+                                  AmbienteEmissaoValidator ambienteEmissaoValidator) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
         this.mdfeCteVinculoService = mdfeCteVinculoService;
+        this.ambienteEmissaoValidator = ambienteEmissaoValidator;
     }
 
     @PostMapping("/api/v1/cte/{chaveAcesso}/consulta")
@@ -70,6 +74,7 @@ public class CteConsultaController {
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
@@ -89,6 +94,7 @@ public class CteConsultaController {
                                                              Authentication authentication) {
         ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
+        ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         verificarPrazoDeCancelamento(chaveAcesso, uf, ambiente, certificado);
