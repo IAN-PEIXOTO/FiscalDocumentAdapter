@@ -330,7 +330,7 @@ resposta, mesmo para códigos não catalogados. Quando a operação falhou,
 | 108 | Serviço da SEFAZ paralisado momentaneamente | TRANSITORIO |
 | 109 | Serviço da SEFAZ paralisado sem previsão | TRANSITORIO |
 | 110 | Uso denegado — irregularidade fiscal cadastral (emitente/destinatário) | CORRIGIVEL_PELO_CLIENTE |
-| 204 | NF-e (mesma chave) já autorizada anteriormente | CORRIGIVEL_PELO_CLIENTE |
+| 204 | NF-e (mesma chave) já autorizada anteriormente — ver nota abaixo | CORRIGIVEL_PELO_CLIENTE |
 | 215 | XML não passou na validação de schema | CORRIGIVEL_PELO_CLIENTE |
 | 217 | NF-e ainda não consta na base da SEFAZ (consultar depois) | TRANSITORIO |
 | 225 | Lote não passou na validação de schema | CORRIGIVEL_PELO_CLIENTE |
@@ -349,6 +349,13 @@ resposta, mesmo para códigos não catalogados. Quando a operação falhou,
 > de entradas). Descrições conferidas contra a tabela pública mantida por
 > `nfephp-org/sped-nfe` — sem acesso direto ao PDF do MOC nesta base de conhecimento,
 > mas consistentes entre múltiplas fontes independentes.
+
+> **cStat 204 é recuperado automaticamente**: um reenvio da mesma chave pelo orquestrador
+> de emissão (após timeout de rede numa tentativa anterior que na verdade já havia sido
+> autorizada) faz a SEFAZ responder 204 em vez de 100. Antes de reportar essa rejeição ao
+> integrador, o adapter consulta a situação real da chave (`nfeConsultaProtocolo4`) e, se
+> ela já estiver autorizada, devolve sucesso com o protocolo verdadeiro — o integrador só
+> vê 204 quando a consulta de confirmação também não indicar autorização.
 
 ## 11. Assíncrono e webhook
 

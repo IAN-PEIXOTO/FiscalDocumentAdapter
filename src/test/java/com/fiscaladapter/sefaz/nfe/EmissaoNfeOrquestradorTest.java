@@ -40,11 +40,13 @@ class EmissaoNfeOrquestradorTest {
     private final AssinaturaXmlService assinaturaXmlService = new AssinaturaXmlService();
     private final NfeXsdValidator xsdValidator = new NfeXsdValidator();
     private final NfeAutorizacaoClient autorizacaoClient = Mockito.mock(NfeAutorizacaoClient.class);
+    private final NfeConsultaProtocoloClient consultaProtocoloClient = Mockito.mock(NfeConsultaProtocoloClient.class);
     private final NfeEpecClient epecClient = Mockito.mock(NfeEpecClient.class);
     private final NfeEmissaoMetrics metrics = new NfeEmissaoMetrics(new SimpleMeterRegistry());
 
     private final EmissaoNfeOrquestrador orquestrador = new EmissaoNfeOrquestrador(
-            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient, epecClient, metrics);
+            chaveAcessoService, xmlGenerator, assinaturaXmlService, xsdValidator, autorizacaoClient,
+            consultaProtocoloClient, epecClient, metrics);
 
     @Test
     void deveAutorizarNaPrimeiraTentativaSemAcionarContingencia() throws Exception {
@@ -117,6 +119,42 @@ class EmissaoNfeOrquestradorTest {
         assertThatThrownBy(() -> orquestrador.emitir(nfe, certificado))
                 .isInstanceOf(SefazComunicacaoException.class)
                 .hasMessageContaining("EPEC");
+    }
+
+    @Test
+    void deveRecuperarProtocoloRealQuandoSefazRespondeDuplicidade() throws Exception {
+        // FIS-62: cStat 204 significa que a SEFAZ ja processou a chave antes (ex.: reenvio deste
+        // orquestrador apos timeout numa tentativa que na verdade foi autorizada) - o adapter deve
+        // consultar o protocolo real e devolver sucesso, nao reportar rejeicao.
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000009", "2026-03-15T10:00:00-03:00"));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
+
+        assertThat(resultado.autorizacao().autorizada()).isTrue();
+        assertThat(resultado.autorizacao().numeroProtocolo()).isEqualTo("135260000000009");
+        verify(autorizacaoClient, times(1)).autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class));
+    }
+
+    @Test
+    void deveManterRejeicaoQuandoDuplicidadeNaoEConfirmadaComoAutorizada() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(ConsultaProtocoloResponse.de("110", "Uso Denegado", null, null));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
+
+        assertThat(resultado.autorizacao().autorizada()).isFalse();
+        assertThat(resultado.autorizacao().codigoStatus()).isEqualTo("204");
     }
 
     @Test

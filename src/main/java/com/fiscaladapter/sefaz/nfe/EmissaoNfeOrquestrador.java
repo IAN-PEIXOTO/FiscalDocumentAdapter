@@ -6,6 +6,7 @@ import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.NfeXmlGenerator;
 import com.fiscaladapter.documento.nfe.NfeXsdValidator;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
+import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.observabilidade.MdcChaveAcesso;
 import com.fiscaladapter.observabilidade.NfeEmissaoMetrics;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
@@ -37,24 +38,28 @@ public class EmissaoNfeOrquestrador {
     private static final int TENTATIVAS_ENDPOINT_NORMAL = 2;
     private static final long ESPERA_ENTRE_TENTATIVAS_MS = 2000;
     private static final String TP_EMIS_EPEC = "4";
+    /** cStat 204 = "Duplicidade de NF-e" - a SEFAZ ja processou essa chave antes (ex.: reenvio apos timeout de rede). */
+    private static final String CSTAT_DUPLICIDADE = "204";
 
     private final ChaveAcessoService chaveAcessoService;
     private final NfeXmlGenerator xmlGenerator;
     private final AssinaturaXmlService assinaturaXmlService;
     private final NfeXsdValidator xsdValidator;
     private final NfeAutorizacaoClient autorizacaoClient;
+    private final NfeConsultaProtocoloClient consultaProtocoloClient;
     private final NfeEpecClient epecClient;
     private final NfeEmissaoMetrics metrics;
 
     public EmissaoNfeOrquestrador(ChaveAcessoService chaveAcessoService, NfeXmlGenerator xmlGenerator,
                                    AssinaturaXmlService assinaturaXmlService, NfeXsdValidator xsdValidator,
-                                   NfeAutorizacaoClient autorizacaoClient, NfeEpecClient epecClient,
-                                   NfeEmissaoMetrics metrics) {
+                                   NfeAutorizacaoClient autorizacaoClient, NfeConsultaProtocoloClient consultaProtocoloClient,
+                                   NfeEpecClient epecClient, NfeEmissaoMetrics metrics) {
         this.chaveAcessoService = chaveAcessoService;
         this.xmlGenerator = xmlGenerator;
         this.assinaturaXmlService = assinaturaXmlService;
         this.xsdValidator = xsdValidator;
         this.autorizacaoClient = autorizacaoClient;
+        this.consultaProtocoloClient = consultaProtocoloClient;
         this.epecClient = epecClient;
         this.metrics = metrics;
     }
@@ -73,6 +78,8 @@ public class EmissaoNfeOrquestrador {
                 try {
                     AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
                             normal.xmlAssinado(), uf, nfe.identificacao().ambiente(), certificado);
+                    autorizacao = recuperarProtocoloSeDuplicidade(
+                            autorizacao, normal.chaveAcesso(), uf, nfe.identificacao().ambiente(), certificado);
                     return finalizarComSucesso(normal, autorizacao, false, cronometro);
                 } catch (SefazComunicacaoException e) {
                     ultimaFalha = e;
@@ -98,6 +105,8 @@ public class EmissaoNfeOrquestrador {
         try (MdcChaveAcesso ignorado = MdcChaveAcesso.abrir(contingencia.chaveAcesso())) {
             AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
                     contingencia.xmlAssinado(), uf, svc.chaveEndpoint(), nfe.identificacao().ambiente(), certificado);
+            autorizacao = recuperarProtocoloSeDuplicidade(
+                    autorizacao, contingencia.chaveAcesso(), uf, nfe.identificacao().ambiente(), certificado);
             return finalizarComSucesso(contingencia, autorizacao, true, cronometro);
         } catch (SefazComunicacaoException falhaContingencia) {
             log.warn("Contingencia {} tambem falhou - acionando EPEC como ultimo recurso. Erro: {}",
@@ -140,6 +149,35 @@ public class EmissaoNfeOrquestrador {
             }
             throw falhaFinal;
         }
+    }
+
+    /**
+     * cStat 204 nao significa que o documento foi rejeitado - significa que a SEFAZ ja recebeu e
+     * processou essa chave antes (tipicamente um reenvio deste orquestrador apos timeout de rede
+     * numa tentativa anterior que na verdade foi autorizada). Nesse caso consulta a situacao real
+     * da chave e, se autorizada, devolve sucesso com o protocolo verdadeiro em vez de reportar uma
+     * rejeicao para um documento que ja e valido perante o fisco.
+     */
+    private AutorizacaoResponse recuperarProtocoloSeDuplicidade(AutorizacaoResponse autorizacao, String chaveAcesso,
+                                                                  String uf, TipoAmbiente ambiente,
+                                                                  CertificadoCarregado certificado) {
+        if (!CSTAT_DUPLICIDADE.equals(autorizacao.codigoStatus())) {
+            return autorizacao;
+        }
+
+        log.warn("SEFAZ respondeu cStat 204 (duplicidade) para a chave {} - consultando o protocolo real antes de reportar rejeicao", chaveAcesso);
+        try {
+            ConsultaProtocoloResponse situacao = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
+            if (situacao.autorizada()) {
+                log.info("Duplicidade confirmada como NFe ja autorizada (protocolo {}) - recuperando sucesso", situacao.numeroProtocolo());
+                return new AutorizacaoResponse(situacao.codigoStatus(), situacao.motivo(),
+                        situacao.numeroProtocolo(), situacao.dhRecbto(), true);
+            }
+        } catch (SefazComunicacaoException falhaConsulta) {
+            log.warn("Falha ao consultar o protocolo real apos cStat 204 para a chave {} - mantendo como rejeicao: {}",
+                    chaveAcesso, falhaConsulta.getMessage());
+        }
+        return autorizacao;
     }
 
     private ResultadoEmissaoNfe finalizarComSucesso(DocumentoPreparado documento, AutorizacaoResponse autorizacao,
