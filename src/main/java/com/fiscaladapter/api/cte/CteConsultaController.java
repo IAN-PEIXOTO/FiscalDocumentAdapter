@@ -67,6 +67,7 @@ public class CteConsultaController {
                                                            @RequestParam String uf,
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
@@ -84,6 +85,7 @@ public class CteConsultaController {
                                                              @RequestParam String numeroProtocolo,
                                                              @RequestParam String justificativa,
                                                              Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 

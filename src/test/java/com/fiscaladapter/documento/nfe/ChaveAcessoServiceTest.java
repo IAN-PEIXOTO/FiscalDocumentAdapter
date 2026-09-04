@@ -55,4 +55,34 @@ class ChaveAcessoServiceTest {
         assertThatThrownBy(() -> service.gerar("SP", LocalDate.now(), "123", "55", 1, 1, 1, "10000001"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    /**
+     * FIS-59: antes da correcao, uma chave curta/vazia fazia o substring interno lancar
+     * StringIndexOutOfBoundsException (virava HTTP 500 generico no controller) em vez de uma
+     * mensagem clara de validacao.
+     */
+    @Test
+    void cnpjEmitenteDeveRejeitarChaveComTamanhoInvalidoComMensagemClara() {
+        assertThatThrownBy(() -> service.cnpjEmitente("123"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("chaveAcesso");
+        assertThatThrownBy(() -> service.cnpjEmitente(""))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.cnpjEmitente(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void cnpjEmitenteDeveRejeitarChaveNaoNumerica() {
+        String chaveComLetras = "a".repeat(44);
+        assertThatThrownBy(() -> service.cnpjEmitente(chaveComLetras))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void modeloDocumentoDeveRejeitarChaveComTamanhoInvalidoComMensagemClara() {
+        assertThatThrownBy(() -> service.modeloDocumento("curta"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("chaveAcesso");
+    }
 }

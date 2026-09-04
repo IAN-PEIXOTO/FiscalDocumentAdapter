@@ -128,6 +128,17 @@ class DocumentoFiscalControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** FIS-59: chave de acesso malformada deve ser rejeitada com 400 claro, nao um 500 generico. */
+    @Test
+    void deveRetornarBadRequestParaChaveDeAcessoMalformada() throws Exception {
+        String accessToken = obterAccessToken(clientId, clientSecret);
+
+        mockMvc.perform(get("/api/v1/documentos/curta-demais")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("chaveAcesso")));
+    }
+
     @Test
     void deveRetornarForbiddenQuandoOutroClienteTentaRecuperarDocumentoDeOutroEmissor() throws Exception {
         String accessToken = obterAccessToken(clientId, clientSecret);

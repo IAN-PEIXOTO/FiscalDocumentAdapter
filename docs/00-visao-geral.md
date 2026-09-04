@@ -227,6 +227,11 @@ GET /api/v1/documentos/{chaveAcesso}
 
 Recupera o XML assinado — restrito ao `client_id` dono do CNPJ emissor.
 
+**Validação de entrada (FIS-59)**: todo endpoint que recebe `{chaveAcesso}` como parte
+do path (consulta, cancelamento, eventos de NFe/NFC-e/CT-e/MDF-e e este próprio) valida
+o formato (44 dígitos numéricos) antes de qualquer processamento, devolvendo HTTP 400
+com mensagem clara para uma chave malformada.
+
 ## 9. NF-e destinadas e manifestação do destinatário
 
 Ver detalhes completos no [manual-nfe.md § 7.5](manual-nfe.md#75-manifestação-do-destinatário-e-nf-e-destinadas)

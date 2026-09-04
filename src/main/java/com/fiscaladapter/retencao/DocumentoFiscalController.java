@@ -1,5 +1,6 @@
 package com.fiscaladapter.retencao;
 
+import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.seguranca.AutorizacaoEmissorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -26,6 +27,7 @@ public class DocumentoFiscalController {
 
     @GetMapping("/api/v1/documentos/{chaveAcesso}")
     public ResponseEntity<DocumentoFiscalResponse> recuperar(@PathVariable String chaveAcesso, Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         return service.recuperar(chaveAcesso)
                 .map(documento -> {
                     autorizacaoEmissorService.validarAcesso(authentication.getName(), documento.cnpjEmissor());

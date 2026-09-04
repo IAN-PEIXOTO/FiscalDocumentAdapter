@@ -48,12 +48,27 @@ public class ChaveAcessoService {
 
     /** Extrai o CNPJ do emitente embutido na chave de acesso (posicoes 6-19, ver layout na Javadoc da classe). */
     public String cnpjEmitente(String chaveAcesso) {
+        validarFormato(chaveAcesso);
         return chaveAcesso.substring(6, 20);
     }
 
     /** Extrai o codigo de modelo (posicoes 20-21, ex.: "55" NFe, "65" NFCe) embutido na chave de acesso (FIS-43). */
     public String modeloDocumento(String chaveAcesso) {
+        validarFormato(chaveAcesso);
         return chaveAcesso.substring(20, 22);
+    }
+
+    /**
+     * FIS-59: sem essa checagem, uma chave curta/vazia faz o `substring` acima lancar
+     * `StringIndexOutOfBoundsException` (cai no handler generico e vira HTTP 500, logado como
+     * erro de infraestrutura) - o controller ja valida antes de chegar aqui
+     * (`ValidacaoParametros.exigirChaveDeAcessoValida`), mas essa segunda camada garante uma
+     * mensagem clara tambem para qualquer outro chamador futuro deste servico.
+     */
+    private void validarFormato(String chaveAcesso) {
+        if (chaveAcesso == null || chaveAcesso.length() != 44 || !chaveAcesso.chars().allMatch(Character::isDigit)) {
+            throw new IllegalArgumentException("chaveAcesso deve conter exatamente 44 digitos numericos: " + chaveAcesso);
+        }
     }
 
     public String modeloPara(TipoDocumentoFiscal tipo) {

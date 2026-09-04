@@ -79,6 +79,7 @@ public class MdfeConsultaController {
                                                            @RequestParam String uf,
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
@@ -121,6 +122,7 @@ public class MdfeConsultaController {
                                                               @RequestParam String codigoMunicipioEncerramento,
                                                               @RequestParam(required = false) LocalDate dataEncerramento,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         ValidacaoParametros.exigirSomenteDigitos(codigoMunicipioEncerramento, "codigoMunicipioEncerramento");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
@@ -169,6 +171,7 @@ public class MdfeConsultaController {
                                                               @RequestParam String numeroProtocolo,
                                                               @RequestParam String justificativa,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 

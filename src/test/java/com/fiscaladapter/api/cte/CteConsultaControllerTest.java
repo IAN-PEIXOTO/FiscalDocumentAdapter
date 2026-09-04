@@ -195,6 +195,20 @@ class CteConsultaControllerTest {
                 .andExpect(jsonPath("$.cancelado").value(true));
     }
 
+    /** FIS-59: chave de acesso malformada deve ser rejeitada com 400 claro, nao um 500 generico. */
+    @Test
+    @Order(7)
+    void deveRejeitarConsultaComChaveDeAcessoMalformada() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/cte/curta-demais/consulta")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("chaveAcesso")));
+    }
+
     /** FIS-58: numeroProtocolo e concatenado direto no XML do evento - deve ser rejeitado cedo se nao for numerico. */
     @Test
     @Order(6)

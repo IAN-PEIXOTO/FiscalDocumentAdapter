@@ -73,6 +73,7 @@ public class NfeConsultaController {
                                                            @RequestParam String uf,
                                                            @RequestParam TipoAmbiente ambiente,
                                                            Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         ConsultaProtocoloResponse resposta = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificadoCarregado);
@@ -90,6 +91,7 @@ public class NfeConsultaController {
                                                               @RequestParam String numeroProtocolo,
                                                               @RequestParam String justificativa,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
@@ -113,6 +115,7 @@ public class NfeConsultaController {
                                                      @RequestParam int numeroSequencial,
                                                      @RequestParam String textoCorrecao,
                                                      Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         CceResponse resposta = cceClient.corrigir(
@@ -163,6 +166,7 @@ public class NfeConsultaController {
                                                                 @RequestParam TipoManifestacaoDestinatario tipo,
                                                                 @RequestParam(required = false) String justificativa,
                                                                 Authentication authentication) {
+        ValidacaoParametros.exigirChaveDeAcessoValida(chaveAcesso);
         CertificadoCarregado certificadoCarregado = certificadoEmissorService.carregar(
                 authentication.getName(), cnpjManifestante.replaceAll("\\D", ""));
 
