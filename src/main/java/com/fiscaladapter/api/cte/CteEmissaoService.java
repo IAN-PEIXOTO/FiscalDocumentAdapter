@@ -82,11 +82,12 @@ public class CteEmissaoService {
         AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(xmlAssinado, uf, cte.identificacao().ambiente(), certificado);
 
         if (autorizacao.autorizada()) {
-            numeracaoSequencialService.reservar(cte.emitente().cnpjSemMascara(), uf,
-                    cte.identificacao().serie(), TipoDocumentoFiscal.CTE, cte.identificacao().numero());
-
+            // Arquiva antes de reservar (FIS-83) - ver justificativa em NfeEmissaoService.processar.
             retencaoDocumentoFiscalService.arquivar(chaveAcesso, cte.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.CTE, autorizacao.numeroProtocolo(), xmlAssinado, cte.identificacao().dataEmissao());
+
+            numeracaoSequencialService.reservar(cte.emitente().cnpjSemMascara(), uf,
+                    cte.identificacao().serie(), TipoDocumentoFiscal.CTE, cte.identificacao().numero());
         }
 
         RejeicaoSefaz rejeicao = !autorizacao.autorizada()

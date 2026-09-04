@@ -81,11 +81,12 @@ public class MdfeEmissaoService {
         AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(xmlAssinado, uf, mdfe.identificacao().ambiente(), certificado);
 
         if (autorizacao.autorizada()) {
-            numeracaoSequencialService.reservar(mdfe.emitente().cnpjSemMascara(), uf,
-                    mdfe.identificacao().serie(), TipoDocumentoFiscal.MDFE, mdfe.identificacao().numero());
-
+            // Arquiva antes de reservar (FIS-83) - ver justificativa em NfeEmissaoService.processar.
             retencaoDocumentoFiscalService.arquivar(chaveAcesso, mdfe.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.MDFE, autorizacao.numeroProtocolo(), xmlAssinado, mdfe.identificacao().dataEmissao());
+
+            numeracaoSequencialService.reservar(mdfe.emitente().cnpjSemMascara(), uf,
+                    mdfe.identificacao().serie(), TipoDocumentoFiscal.MDFE, mdfe.identificacao().numero());
 
             mdfeCteVinculoService.registrar(chaveAcesso, mdfe.chavesCteTransportados());
         }

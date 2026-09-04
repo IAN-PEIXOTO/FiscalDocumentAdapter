@@ -112,11 +112,12 @@ public class NfceEmissaoService {
         AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(xmlComQrCode, uf, nfce.identificacao().ambiente(), certificado);
 
         if (autorizacao.autorizada()) {
-            numeracaoSequencialService.reservar(nfce.emitente().cnpjSemMascara(), uf,
-                    nfce.identificacao().serie(), TipoDocumentoFiscal.NFCE, nfce.identificacao().numero());
-
+            // Arquiva antes de reservar (FIS-83) - ver justificativa em NfeEmissaoService.processar.
             retencaoDocumentoFiscalService.arquivar(chaveAcesso, nfce.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.NFCE, autorizacao.numeroProtocolo(), xmlComQrCode, nfce.identificacao().dataEmissao());
+
+            numeracaoSequencialService.reservar(nfce.emitente().cnpjSemMascara(), uf,
+                    nfce.identificacao().serie(), TipoDocumentoFiscal.NFCE, nfce.identificacao().numero());
         }
 
         RejeicaoSefaz rejeicao = !autorizacao.autorizada()

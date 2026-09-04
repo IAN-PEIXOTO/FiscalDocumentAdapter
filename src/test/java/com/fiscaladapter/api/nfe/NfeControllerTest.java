@@ -3,6 +3,9 @@ package com.fiscaladapter.api.nfe;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.documento.TipoDocumentoFiscal;
+import com.fiscaladapter.numeracao.NumeracaoSequencialService;
+import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
@@ -10,10 +13,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,7 +29,9 @@ import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -57,6 +64,12 @@ class NfeControllerTest {
 
     @Autowired
     private CertificadoEmissorService certificadoEmissorService;
+
+    @Autowired
+    private NumeracaoSequencialService numeracaoSequencialService;
+
+    @SpyBean
+    private RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
 
     @MockBean
     private NfeAutorizacaoClient autorizacaoClient;
@@ -144,6 +157,29 @@ class NfeControllerTest {
                 .andExpect(jsonPath("$.autorizada").value(false))
                 .andExpect(jsonPath("$.categoriaErro").value("DESCONHECIDA"))
                 .andExpect(jsonPath("$.mensagemErro").value("Motivo bem especifico nunca visto antes"));
+    }
+
+    /**
+     * FIS-83: se o numero ja estiver reservado (ex.: tentativa anterior que caiu entre reservar e
+     * arquivar), a nova tentativa autorizada pela SEFAZ ainda deve ser arquivada (XML/protocolo
+     * preservados) antes do erro de numeracao ser propagado - nao pode ficar "perdida" so porque
+     * a reserva de numero colidiu.
+     */
+    @Test
+    void deveArquivarDocumentoMesmoQuandoNumeroJaEstaReservado() throws Exception {
+        numeracaoSequencialService.reservar(CNPJ_EMISSOR, "SP", 1, TipoDocumentoFiscal.NFE, 500L);
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(500L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-numero-colidido"))
+                .andExpect(status().isConflict());
+
+        ArgumentCaptor<String> chaveCapturada = ArgumentCaptor.forClass(String.class);
+        verify(retencaoDocumentoFiscalService).arquivar(chaveCapturada.capture(), any(), any(), any(), any(), any());
+        assertThat(retencaoDocumentoFiscalService.recuperar(chaveCapturada.getValue())).isPresent();
     }
 
     @Test

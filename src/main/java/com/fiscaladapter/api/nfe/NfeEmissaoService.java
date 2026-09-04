@@ -69,13 +69,19 @@ public class NfeEmissaoService {
         // so reserva o numero quando o documento efetivamente "valeu" perante o fisco (FIS-23) -
         // uma submissao rejeitada nao consome o numero, o ERP pode corrigir e reenviar o mesmo.
         if (resultado.autorizacao().autorizada() || resultado.viaEpec()) {
-            numeracaoSequencialService.reservar(nfe.emitente().cnpjSemMascara(), nfe.identificacao().uf(),
-                    nfe.identificacao().serie(), TipoDocumentoFiscal.NFE, nfe.identificacao().numero());
-
-            // retencao legal do XML autorizado, no minimo 5 anos (FIS-26/34)
+            // Arquiva ANTES de reservar o numero (FIS-83): arquivar() e idempotente por chave de
+            // acesso (DataIntegrityViolationException ignorada em duplicata), enquanto reservar()
+            // lanca NumeracaoIndisponivelException se o numero ja foi usado. Se o processo cair
+            // entre as duas chamadas, a ordem anterior (reservar -> arquivar) deixava o documento
+            // ja autorizado pela SEFAZ sem XML/protocolo salvos - nesta ordem, mesmo que reservar()
+            // falhe depois, o XML e o protocolo ja estao gravados e recuperaveis por chave de
+            // acesso (nao mais silenciosamente perdidos).
             retencaoDocumentoFiscalService.arquivar(resultado.chaveAcesso(), nfe.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.NFE, resultado.autorizacao().numeroProtocolo(), resultado.xmlAssinado(),
                     nfe.identificacao().dataEmissao());
+
+            numeracaoSequencialService.reservar(nfe.emitente().cnpjSemMascara(), nfe.identificacao().uf(),
+                    nfe.identificacao().serie(), TipoDocumentoFiscal.NFE, nfe.identificacao().numero());
         }
 
         // so classifica como "rejeicao" uma negativa de fato - EPEC libera a nota provisoriamente
