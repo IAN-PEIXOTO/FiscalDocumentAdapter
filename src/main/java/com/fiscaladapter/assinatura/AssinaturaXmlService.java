@@ -97,9 +97,21 @@ public class AssinaturaXmlService {
         throw new IllegalArgumentException("Elemento com Id='" + id + "' nao encontrado no XML");
     }
 
+    /**
+     * FIS-107: XML fiscal (NFe/CTe/MDFe/evento) nunca tem DOCTYPE legitimamente - desabilitar por
+     * completo fecha qualquer risco de XXE (entidade externa resolvida no servidor, causando
+     * vazamento de arquivo local ou SSRF), independente de existir ou nao, hoje, algum ponto de
+     * injecao de XML ainda nao descoberto num dos geradores (varios ja foram achados e corrigidos
+     * ao longo das auditorias - FIS-57/58/67).
+     */
     private Document parse(String xml) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
         return factory.newDocumentBuilder().parse(
                 new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
     }

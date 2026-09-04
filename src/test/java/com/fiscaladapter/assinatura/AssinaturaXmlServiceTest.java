@@ -25,6 +25,7 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AssinaturaXmlServiceTest {
 
@@ -54,6 +55,22 @@ class AssinaturaXmlServiceTest {
 
         // 2. a assinatura e criptograficamente verificavel com a chave publica do certificado
         assertThat(assinaturaEhValida(xmlAssinado, idInfNfe, certificado)).isTrue();
+    }
+
+    /**
+     * FIS-107: XML fiscal nunca tem DOCTYPE legitimamente - o parser precisa rejeitar por completo
+     * em vez de resolver uma entidade externa (o que causaria vazamento de arquivo local/SSRF se
+     * algum ponto de injecao de XML ainda nao descoberto conseguisse fazer um DOCTYPE chegar aqui).
+     */
+    @Test
+    void deveRejeitarXmlComDoctypeEEntidadeExternaEmVezDeResolverAEntidade() throws Exception {
+        String xmlMalicioso = "<?xml version=\"1.0\"?>"
+                + "<!DOCTYPE NFe [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
+                + "<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe Id=\"NFe123\">&xxe;</infNFe></NFe>";
+        CertificadoCarregado certificado = carregarCertificadoDeTeste();
+
+        assertThatThrownBy(() -> assinaturaXmlService.assinar(xmlMalicioso, "NFe123", certificado))
+                .isInstanceOf(AssinaturaDigitalException.class);
     }
 
     private CertificadoCarregado carregarCertificadoDeTeste() throws Exception {
