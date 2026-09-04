@@ -117,6 +117,24 @@ devolve a resposta já cacheada (criptografada em repouso); depois de expirar, a
 assíncrono (`POST /api/v1/nfe/assincrono`) usa sua própria checagem por
 `(client_id, Idempotency-Key)` — reenviar devolve o `id` do job já existente.
 
+> **Requisição presa em PROCESSANDO (FIS-65)**: se o processo cair entre transmitir o
+> documento à SEFAZ e gravar a resposta, o registro fica em `PROCESSANDO` indefinidamente
+> — sem um limite próprio, ficaria bloqueando a mesma `Idempotency-Key` com HTTP 409 pelas
+> 24h inteiras da janela (o status `PROCESSANDO` é checado antes da janela de
+> deduplicação). Por isso existe um limite de tempo de processamento separado (10 minutos,
+> bem acima do pior caso de latência normal — endpoint normal + contingência + EPEC), após
+> o qual o registro preso é liberado e a próxima chamada com a mesma chave é tratada como
+> nova (log de aviso registrado nesse momento, para permitir alertar em produção).
+>
+> **Limitação conhecida**: essa reprocessamento tardio gera uma **chave de acesso nova**
+> (o valor não é persistido junto à `Idempotency-Key`) — se a tentativa original já tinha
+> sido autorizada pela SEFAZ antes do processo cair, o reprocessamento pode gerar um
+> segundo documento fiscal legítimo para o mesmo pedido lógico do integrador, já que as
+> chaves são diferentes (a recuperação por cStat 204, FIS-62, só funciona quando é a
+> *mesma* chave que é reenviada). Persistir a chave de acesso reservada junto ao registro
+> de idempotência para reaproveitá-la num reprocessamento tardio é debito tecnico registrado
+> para uma versão futura.
+
 Header ausente onde é obrigatório → `MissingRequestHeaderException` (HTTP 400).
 
 ## 4. Ambientes (homologação / produção)

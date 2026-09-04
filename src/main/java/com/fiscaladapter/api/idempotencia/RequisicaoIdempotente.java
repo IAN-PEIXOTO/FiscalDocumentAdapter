@@ -11,6 +11,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -77,6 +78,17 @@ public class RequisicaoIdempotente {
 
     boolean expirada(Instant referencia) {
         return referencia.isAfter(expiraEm);
+    }
+
+    /**
+     * Verdadeiro se a requisicao ainda esta PROCESSANDO ha mais tempo do que uma emissao
+     * normal levaria (FIS-65) - sinal de que o processo caiu entre transmitir a SEFAZ e gravar
+     * a resposta, deixando o registro preso indefinidamente (o status PROCESSANDO por si so
+     * nao expira pela janela de 24h de {@link #expirada}, que so vale para o cache de resposta
+     * de uma requisicao CONCLUIDA).
+     */
+    boolean processandoHaMuitoTempo(Instant referencia, Duration tempoLimiteProcessamento) {
+        return referencia.isAfter(criadoEm.plus(tempoLimiteProcessamento));
     }
 
     public Long getId() {

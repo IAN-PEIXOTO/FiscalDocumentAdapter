@@ -2,6 +2,8 @@ package com.fiscaladapter.api.idempotencia;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fiscaladapter.seguranca.CriptografiaEmRepousoService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -20,8 +22,20 @@ import java.util.function.Supplier;
 @Service
 public class IdempotenciaService {
 
-    /** Janela de validade da chave de idempotencia: apos esse prazo, a mesma chave pode ser reutilizada. */
+    private static final Logger log = LoggerFactory.getLogger(IdempotenciaService.class);
+
+    /** Janela de validade do cache de resposta: apos esse prazo, a mesma chave pode ser reutilizada. */
     static final Duration JANELA_VALIDADE = Duration.ofHours(24);
+
+    /**
+     * Tempo maximo que uma requisicao fica legitimamente em PROCESSANDO (FIS-65) - bem maior que
+     * o pior caso de latencia normal (endpoint normal + contingencia + EPEC, ver
+     * EmissaoNfeOrquestrador, na casa de poucos minutos), mas MUITO menor que a janela de 24h do
+     * cache de resposta. Sem esse limite, uma requisicao presa em PROCESSANDO (processo caiu
+     * entre transmitir a SEFAZ e gravar a resposta) bloquearia a mesma Idempotency-Key com 409
+     * para sempre, ja que o status PROCESSANDO e checado antes da janela de 24h.
+     */
+    static final Duration TEMPO_LIMITE_PROCESSANDO = Duration.ofMinutes(10);
 
     private static final int MAX_TENTATIVAS = 3;
 
@@ -80,6 +94,14 @@ public class IdempotenciaService {
                     continue; // foi removida entre a colisao e a leitura (falha concluida); tenta de novo
                 }
                 if (existente.getStatus() == StatusRequisicaoIdempotente.PROCESSANDO) {
+                    if (existente.processandoHaMuitoTempo(Instant.now(), TEMPO_LIMITE_PROCESSANDO)) {
+                        log.warn("Requisicao idempotente presa em PROCESSANDO ha mais de {} - processo provavelmente "
+                                        + "caiu antes de concluir; liberando para reprocessamento (clientId={}, "
+                                        + "tipoOperacao={}, chave={})",
+                                TEMPO_LIMITE_PROCESSANDO, clientId, tipoOperacao, chave);
+                        repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave);
+                        continue;
+                    }
                     throw new RequisicaoEmProcessamentoException(chave);
                 }
                 if (existente.expirada(Instant.now())) {
