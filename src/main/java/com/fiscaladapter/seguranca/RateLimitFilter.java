@@ -41,13 +41,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
+    /**
+     * A identidade autenticada (quando disponivel) tem prioridade sobre o parametro de request
+     * "client_id" (FIS-69): no filtro da API de recursos, o token Bearer ja foi validado antes
+     * deste filtro rodar, entao usar "client_id" ali permitiria a um cliente autenticado escapar
+     * do proprio limite so variando esse parametro a cada chamada. O fallback para o parametro
+     * so se aplica ao endpoint /oauth2/token (RateLimitFilter tambem roda no chain do
+     * Authorization Server), onde o client_id e o proprio identificador do requerente e ainda nao
+     * ha uma Authentication populada nesse ponto do fluxo OAuth2 client_credentials.
+     */
     private String identificarCliente(HttpServletRequest request) {
-        String clientIdParam = request.getParameter("client_id");
-        if (clientIdParam != null) {
-            return clientIdParam;
-        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null ? auth.getName() : null;
+        if (auth != null) {
+            return auth.getName();
+        }
+        return request.getParameter("client_id");
     }
 
     private boolean excedeuLimite(String clientId) {
