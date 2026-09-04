@@ -29,4 +29,18 @@ class NfeXsdValidatorTest {
                     assertThat(invalido.getErros().get(0)).contains("Signature");
                 });
     }
+
+    /**
+     * FIS-108: mesmo raciocinio do FIS-107 (AssinaturaXmlService) - este validador roda ANTES da
+     * assinatura no pipeline de emissao, entao precisa da mesma protecao contra XXE.
+     */
+    @Test
+    void deveRejeitarXmlComDoctypeEEntidadeExternaEmVezDeResolverAEntidade() {
+        String xmlMalicioso = "<?xml version=\"1.0\"?>"
+                + "<!DOCTYPE NFe [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
+                + "<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe Id=\"NFe123\">&xxe;</infNFe></NFe>";
+
+        assertThatThrownBy(() -> validator.validar(xmlMalicioso))
+                .isInstanceOf(XmlInvalidoException.class);
+    }
 }

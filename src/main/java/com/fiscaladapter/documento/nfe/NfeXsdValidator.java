@@ -37,6 +37,12 @@ public class NfeXsdValidator {
         List<String> erros = new ArrayList<>();
         try {
             Validator validator = schema.newValidator();
+            // FIS-108: mesmo endurecimento contra XXE do FIS-107 (AssinaturaXmlService) - este
+            // validador roda ANTES da assinatura no pipeline de emissao, entao e o primeiro parser
+            // a tocar o XML gerado.
+            validator.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            validator.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            validator.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             validator.setErrorHandler(new ErrorHandler() {
                 @Override
                 public void warning(SAXParseException exception) {
