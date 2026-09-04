@@ -8,8 +8,15 @@ public record NotaFiscalEletronica(
         Emitente emitente,
         Destinatario destinatario,
         List<ItemNota> itens,
-        List<DetalhePagamento> pagamentos
+        List<DetalhePagamento> pagamentos,
+        BigDecimal valorTroco
 ) {
+    /** Sem troco (FIS-72) - mantido para nao quebrar os chamadores existentes que nao usam vTroco. */
+    public NotaFiscalEletronica(IdentificacaoNfe identificacao, Emitente emitente, Destinatario destinatario,
+                                 List<ItemNota> itens, List<DetalhePagamento> pagamentos) {
+        this(identificacao, emitente, destinatario, itens, pagamentos, BigDecimal.ZERO);
+    }
+
     public BigDecimal valorTotalProdutos() {
         return itens.stream().map(ItemNota::valorTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
     }

@@ -95,6 +95,29 @@ class RegraNegocioServiceTest {
     }
 
     @Test
+    void devePermitirPagamentoEmDinheiroMaiorQueOTotalComTrocoDeclarado() {
+        // FIS-72: venda de 100.00 paga com uma nota de 103.00, troco de 3.00 - vPag > vNF
+        // e valido desde que a diferenca seja o vTroco declarado.
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(base.identificacao(), base.emitente(), base.destinatario(),
+                base.itens(), List.of(new DetalhePagamento("01", BigDecimal.valueOf(103.00))), BigDecimal.valueOf(3.00));
+
+        service.validar(nfe);
+    }
+
+    @Test
+    void deveRejeitarQuandoVTrocoNaoExplicaADiferenca() {
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(base.identificacao(), base.emitente(), base.destinatario(),
+                base.itens(), List.of(new DetalhePagamento("01", BigDecimal.valueOf(103.00))), BigDecimal.valueOf(1.00));
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-004")));
+    }
+
+    @Test
     void deveRejeitarEmitenteDoSimplesNacionalUsandoGrupoCst() {
         // notaDeExemplo() usa CRT=3 (Regime Normal) com ICMS00 (CST) - troca so o CRT para 1 (Simples Nacional)
         NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();

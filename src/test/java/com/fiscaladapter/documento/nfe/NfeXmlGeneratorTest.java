@@ -87,6 +87,31 @@ class NfeXmlGeneratorTest {
         assertApenasAssinaturaAusente(xml);
     }
 
+    @Test
+    void deveGerarVTrocoQuandoHaTrocoEValidoContraXsd() throws Exception {
+        // FIS-72: pagamento em dinheiro maior que o total, com troco declarado.
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(base.identificacao(), base.emitente(), base.destinatario(),
+                base.itens(), java.util.List.of(new DetalhePagamento("01", java.math.BigDecimal.valueOf(103.00))),
+                java.math.BigDecimal.valueOf(3.00));
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        assertThat(textoDe(documento, "vTroco")).isEqualTo("3.00");
+        assertApenasAssinaturaAusente(xml);
+    }
+
+    @Test
+    void naoDeveGerarVTrocoQuandoNaoHaTroco() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        assertThat(documento.getElementsByTagName("vTroco").getLength()).isEqualTo(0);
+    }
+
     /** XML sem assinatura (FIS-4 acontece depois) so pode falhar a validacao XSD por causa do Signature ausente. */
     private void assertApenasAssinaturaAusente(String xml) {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> new NfeXsdValidator().validar(xml))

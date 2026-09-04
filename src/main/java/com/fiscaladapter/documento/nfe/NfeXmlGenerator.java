@@ -303,6 +303,10 @@ public class NfeXmlGenerator {
             tag(xml, "vPag", moeda(pagamento.valor()));
             xml.writeEndElement();
         }
+        // vTroco e opcional no schema (minOccurs=0, FIS-72) - so escrito quando ha troco de fato.
+        if (nfe.valorTroco().compareTo(BigDecimal.ZERO) > 0) {
+            tag(xml, "vTroco", moeda(nfe.valorTroco()));
+        }
         xml.writeEndElement();
     }
 

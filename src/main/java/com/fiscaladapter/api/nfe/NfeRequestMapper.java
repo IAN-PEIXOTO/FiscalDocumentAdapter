@@ -33,7 +33,8 @@ public class NfeRequestMapper {
                 emitente(infNFe.emit()),
                 destinatario(infNFe.dest()),
                 itens(infNFe.det()),
-                pagamentos(infNFe.pag())
+                pagamentos(infNFe.pag()),
+                infNFe.pag().vTroco() != null ? infNFe.pag().vTroco() : BigDecimal.ZERO
         );
     }
 
