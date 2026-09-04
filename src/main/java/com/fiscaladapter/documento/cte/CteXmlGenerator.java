@@ -1,5 +1,6 @@
 package com.fiscaladapter.documento.cte;
 
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.Emitente;
@@ -96,7 +97,7 @@ public class CteXmlGenerator {
         tag(xml, "mod", chaveAcessoService.modeloPara(TipoDocumentoFiscal.CTE));
         tag(xml, "serie", String.valueOf(ide.serie()));
         tag(xml, "nCT", String.valueOf(ide.numero()));
-        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EMISSAO_FORMAT));
+        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(FusoHorarioFiscal.BRASIL).format(DATA_EMISSAO_FORMAT));
         tag(xml, "tpImp", "1"); // 1 = retrato
         tag(xml, "tpEmis", chaveAcesso.substring(34, 35));
         tag(xml, "cDV", chaveAcesso.substring(43));

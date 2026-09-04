@@ -117,6 +117,31 @@ class NfeEpecClientTest {
         }
     }
 
+    /** FIS-84: dhEmi do evento EPEC tambem usava o fuso do SO em vez de um fuso fiscal fixo. */
+    @Test
+    void dhEmiDeveUsarFusoDoBrasilIndependenteDoFusoDoSistema() throws Exception {
+        java.util.TimeZone fusoOriginal = java.util.TimeZone.getDefault();
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
+            CertificadoCarregado certificado = certificadoDeTeste();
+            NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+
+            try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+                assertThat(req).contains("dhEmi>").doesNotContain("dhEmi>2026-03-15T00:00:00+00:00");
+                assertThat(req).containsPattern("<dhEmi>2026-03-15T00:00:00-03:00");
+                return RESPOSTA_EPEC_REGISTRADO;
+            })) {
+                HttpClient httpClient = new SefazHttpClientFactory()
+                        .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+                NfeEpecClient client = new NfeEpecClient(null, null, new AssinaturaXmlService());
+                client.registrar(servidor.url(), nfe, CHAVE_ACESSO, TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
+            }
+        } finally {
+            java.util.TimeZone.setDefault(fusoOriginal);
+        }
+    }
+
     private CertificadoCarregado certificadoDeTeste() throws Exception {
         char[] senha = "senha123".toCharArray();
         byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", senha,

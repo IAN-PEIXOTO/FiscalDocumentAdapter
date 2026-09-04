@@ -87,6 +87,27 @@ class NfeXmlGeneratorTest {
         assertApenasAssinaturaAusente(xml);
     }
 
+    /**
+     * FIS-84: dhEmi usava ZoneId.systemDefault() - dependente do fuso configurado no SO/container
+     * onde a JVM roda, em vez de um fuso fiscal fixo. Forca o default da JVM para UTC durante o
+     * teste e comprova que o offset gerado continua sendo o do Brasil (-03:00), nao +00:00.
+     */
+    @Test
+    void dhEmiDeveUsarFusoDoBrasilIndependenteDoFusoDoSistema() throws Exception {
+        java.util.TimeZone fusoOriginal = java.util.TimeZone.getDefault();
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
+            NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+
+            String xml = generator.gerar(nfe);
+            Document documento = parse(xml);
+
+            assertThat(textoDe(documento, "dhEmi")).endsWith("-03:00");
+        } finally {
+            java.util.TimeZone.setDefault(fusoOriginal);
+        }
+    }
+
     @Test
     void deveGerarVTrocoQuandoHaTrocoEValidoContraXsd() throws Exception {
         // FIS-72: pagamento em dinheiro maior que o total, com troco declarado.

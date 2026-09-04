@@ -1,5 +1,6 @@
 package com.fiscaladapter.documento.nfe;
 
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import org.springframework.stereotype.Component;
 
@@ -94,7 +95,7 @@ public class NfeXmlGenerator {
         tag(xml, "mod", chaveAcessoService.modeloPara(ide.tipoDocumento()));
         tag(xml, "serie", String.valueOf(ide.serie()));
         tag(xml, "nNF", String.valueOf(ide.numero()));
-        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EMISSAO_FORMAT));
+        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(FusoHorarioFiscal.BRASIL).format(DATA_EMISSAO_FORMAT));
         tag(xml, "tpNF", "1"); // 1 = saida
         // sem destinatario (NFC-e para consumidor nao identificado): operacao sempre interna (mesma UF)
         boolean operacaoInterna = nfe.destinatario() == null || nfe.destinatario().endereco().uf().equals(ide.uf());

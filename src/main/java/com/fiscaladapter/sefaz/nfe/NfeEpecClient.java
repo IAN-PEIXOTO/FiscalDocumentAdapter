@@ -3,6 +3,7 @@ package com.fiscaladapter.sefaz.nfe;
 import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.documento.CodigoUfSefaz;
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.nfe.Destinatario;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
@@ -86,7 +87,7 @@ public class NfeEpecClient {
                 + "<tpAutor>1</tpAutor>"
                 + "<verAplic>1.0.0</verAplic>"
                 + "<dhEmi>" + nfe.identificacao().dataEmissao()
-                        .atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EVENTO_FORMAT) + "</dhEmi>"
+                        .atStartOfDay(FusoHorarioFiscal.BRASIL).format(DATA_EVENTO_FORMAT) + "</dhEmi>"
                 + "<tpNF>1</tpNF>"
                 + "<IE>" + escaparXml(nfe.emitente().inscricaoEstadual()) + "</IE>"
                 + destinatario(nfe.destinatario())

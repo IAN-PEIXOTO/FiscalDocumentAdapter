@@ -1,5 +1,6 @@
 package com.fiscaladapter.documento.mdfe;
 
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import org.springframework.stereotype.Component;
@@ -90,7 +91,7 @@ public class MdfeXmlGenerator {
         tag(xml, "cMDF", chaveAcesso.substring(35, 43));
         tag(xml, "cDV", chaveAcesso.substring(43));
         tag(xml, "modal", "1"); // 1 = rodoviario (unico modal suportado nesta fase - ver Mdfe.java)
-        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EMISSAO_FORMAT));
+        tag(xml, "dhEmi", ide.dataEmissao().atStartOfDay(FusoHorarioFiscal.BRASIL).format(DATA_EMISSAO_FORMAT));
         tag(xml, "tpEmis", chaveAcesso.substring(34, 35));
         tag(xml, "procEmi", "0"); // emissao por aplicativo do contribuinte
         tag(xml, "verProc", "1.0.0");
