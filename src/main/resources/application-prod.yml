@@ -20,6 +20,16 @@ spring:
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    # FIS-82: valores explicitos em vez do default silencioso do HikariCP (maximum-pool-size=10,
+    # sem leak-detection). Dimensionado para uma unica instancia - revisar se/quando escalar
+    # horizontalmente (cada instancia abre seu proprio pool). leak-detection-threshold avisa em
+    # log quando uma conexao fica presa por mais tempo que o normal (ex.: regressao futura
+    # similar ao FIS-77, transacao segurando conexao durante I/O de rede).
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
