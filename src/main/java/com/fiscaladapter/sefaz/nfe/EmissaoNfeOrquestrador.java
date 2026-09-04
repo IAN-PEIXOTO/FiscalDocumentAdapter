@@ -163,6 +163,14 @@ public class EmissaoNfeOrquestrador {
      * quando a autorizacao foi enviada ao SVC, mandava a consulta de recuperacao para um endpoint
      * provavelmente ainda fora do ar (motivo de ter acionado a contingencia), fazendo a
      * recuperacao falhar silenciosamente e manter a rejeicao (204) falsa.
+     *
+     * FIS-106: a mesma consulta tambem pode revelar que a chave, na verdade, foi DENEGADA (110/
+     * 301/302) - nao autorizada, mas tambem nao uma rejeicao comum, ja que a SEFAZ ja consome
+     * definitivamente aquele numero (ver AutorizacaoResponse.denegada(), FIS-100). Se devolvessemos
+     * a resposta original (cStat 204) sem repassar o cStat/motivo reais da denegacao, o chamador
+     * (NfeEmissaoService) nunca acionaria o arquivamento+reserva de numeracao do FIS-100 - o
+     * documento voltaria a ficar sem numero reservado, reabrindo exatamente aquele bug so que
+     * atraves deste caminho de recuperacao de duplicidade.
      */
     private AutorizacaoResponse recuperarProtocoloSeDuplicidade(AutorizacaoResponse autorizacao, String chaveAcesso,
                                                                   String uf, String chaveEndpoint, TipoAmbiente ambiente,
@@ -178,6 +186,12 @@ public class EmissaoNfeOrquestrador {
                 log.info("Duplicidade confirmada como NFe ja autorizada (protocolo {}) - recuperando sucesso", situacao.numeroProtocolo());
                 return new AutorizacaoResponse(situacao.codigoStatus(), situacao.motivo(),
                         situacao.numeroProtocolo(), situacao.dhRecbto(), true);
+            }
+            if (situacao.denegada()) {
+                log.info("Duplicidade (204) confirmada como uso denegado (cStat {}) - repassando a denegacao real em vez da duplicidade",
+                        situacao.codigoStatus());
+                return new AutorizacaoResponse(situacao.codigoStatus(), situacao.motivo(),
+                        situacao.numeroProtocolo(), situacao.dhRecbto(), false);
             }
         } catch (SefazComunicacaoException falhaConsulta) {
             log.warn("Falha ao consultar o protocolo real apos cStat 204 para a chave {} - mantendo como rejeicao: {}",

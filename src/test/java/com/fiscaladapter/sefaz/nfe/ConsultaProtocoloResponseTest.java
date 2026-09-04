@@ -33,4 +33,21 @@ class ConsultaProtocoloResponseTest {
 
         assertThat(resposta.autorizada()).isFalse();
     }
+
+    /** FIS-106: usados por EmissaoNfeOrquestrador.recuperarProtocoloSeDuplicidade para reconhecer uma denegacao real por tras de um 204. */
+    @Test
+    void cStatDeDenegacaoDeveSerDenegadaENaoAutorizada() {
+        ConsultaProtocoloResponse resposta = ConsultaProtocoloResponse.de("301",
+                "Uso Denegado: Irregularidade fiscal do emitente", null, null);
+
+        assertThat(resposta.denegada()).isTrue();
+        assertThat(resposta.autorizada()).isFalse();
+    }
+
+    @Test
+    void cStatDeRejeicaoNaoDeveSerDenegada() {
+        ConsultaProtocoloResponse resposta = ConsultaProtocoloResponse.de("225", "Falha no schema XML", null, null);
+
+        assertThat(resposta.denegada()).isFalse();
+    }
 }

@@ -13,7 +13,14 @@ public record ConsultaProtocoloResponse(String codigoStatus, String motivo, Stri
      */
     private static final Set<String> CSTAT_SUCESSO = Set.of("100", "150");
 
+    /** FIS-106: mesmo conjunto de {@link AutorizacaoResponse#denegada()} - ver javadoc la. */
+    private static final Set<String> CSTAT_DENEGADO = Set.of("110", "301", "302");
+
     public static ConsultaProtocoloResponse de(String codigoStatus, String motivo, String numeroProtocolo, String dhRecbto) {
         return new ConsultaProtocoloResponse(codigoStatus, motivo, numeroProtocolo, dhRecbto, CSTAT_SUCESSO.contains(codigoStatus));
+    }
+
+    public boolean denegada() {
+        return CSTAT_DENEGADO.contains(codigoStatus);
     }
 }

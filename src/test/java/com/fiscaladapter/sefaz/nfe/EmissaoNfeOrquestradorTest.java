@@ -142,6 +142,26 @@ class EmissaoNfeOrquestradorTest {
     }
 
     @Test
+    void deveRepassarADenegacaoRealQuandoDuplicidadeEraNaVerdadeUsoDenegado() throws Exception {
+        // FIS-106: a consulta pode revelar que a chave, por tras do 204, na verdade foi DENEGADA
+        // (110/301/302) - se devolvessemos o "204" original sem repassar o cStat real, o chamador
+        // (NfeEmissaoService) nunca acionaria o arquivamento+reserva de numeracao do FIS-100.
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(ConsultaProtocoloResponse.de("301", "Uso Denegado: Irregularidade fiscal do emitente", null, null));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
+
+        assertThat(resultado.autorizacao().autorizada()).isFalse();
+        assertThat(resultado.autorizacao().denegada()).isTrue();
+        assertThat(resultado.autorizacao().codigoStatus()).isEqualTo("301");
+    }
+
+    @Test
     void deveConsultarOEndpointDoSvcAoRecuperarDuplicidadeDuranteContingencia() throws Exception {
         // FIS-101: em contingencia, a autorizacao vai para o SVC, mas a consulta de recuperacao de
         // duplicidade (204) mandava sempre para o endpoint da UF - que provavelmente ainda esta
@@ -175,8 +195,10 @@ class EmissaoNfeOrquestradorTest {
 
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
+        // FIS-106: "225" (rejeicao de schema) nao e nem autorizada() nem denegada() - o caso onde a
+        // duplicidade de fato deve ser mantida como esta, sem repassar nenhuma outra situacao real.
         when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
-                .thenReturn(ConsultaProtocoloResponse.de("110", "Uso Denegado", null, null));
+                .thenReturn(ConsultaProtocoloResponse.de("225", "Falha no schema XML", null, null));
 
         ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
 
