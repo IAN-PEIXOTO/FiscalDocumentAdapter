@@ -7,11 +7,23 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+
 /**
  * So em dev: cria um client_id/client_secret de exemplo se nao existir
- * nenhum cliente cadastrado, e loga o segredo uma unica vez. Facilita testar
- * a API localmente sem precisar de um endpoint de cadastro (que ainda nao
- * existe - ver observacao no FIS-15 sobre cadastro/gestao de clientes).
+ * nenhum cliente cadastrado. Facilita testar a API localmente sem precisar
+ * de um endpoint de cadastro (que ainda nao existe - ver observacao no
+ * FIS-15 sobre cadastro/gestao de clientes).
+ *
+ * O client_secret NUNCA vai para o log (FIS-60) - mesmo so em dev, um log
+ * agregado (ELK/CloudWatch/etc.) ou um profile "dev" ativado por engano num
+ * ambiente compartilhado exporia o segredo em texto claro permanentemente,
+ * sem possibilidade de rotacao retroativa do que ja vazou. Em vez disso, e
+ * gravado uma unica vez num arquivo local (fora do sistema de logging) - so
+ * o caminho do arquivo (nao o segredo) e logado.
  */
 @Configuration
 @Profile("dev")
@@ -24,9 +36,28 @@ public class BootstrapClienteDevConfig {
         return args -> {
             if (repository.count() == 0) {
                 ClienteApiService.CredenciaisGeradas credenciais = service.cadastrar("Cliente de desenvolvimento");
-                log.info("Cliente de API criado para dev - client_id: {} | client_secret: {} (guarde agora, nao sera exibido de novo)",
-                        credenciais.clientId(), credenciais.clientSecret());
+                Path arquivo = gravarCredenciaisEmArquivoLocal(credenciais);
+                log.info("Cliente de API criado para dev - client_id: {} - client_secret gravado em {} "
+                                + "(leia agora e apague o arquivo depois; nao sera reescrito nem reexibido)",
+                        credenciais.clientId(), arquivo);
             }
         };
+    }
+
+    private Path gravarCredenciaisEmArquivoLocal(ClienteApiService.CredenciaisGeradas credenciais) throws IOException {
+        Path arquivo = Files.createTempFile("fiscaladapter-dev-credenciais-", ".txt");
+        try {
+            Files.setPosixFilePermissions(arquivo, PosixFilePermissions.fromString("rw-------"));
+        } catch (UnsupportedOperationException ignorada) {
+            // sistema de arquivos sem suporte a permissoes POSIX (ex.: Windows) - restringe via
+            // java.io.File como melhor esforco, suficiente para uso local de dev
+            arquivo.toFile().setReadable(false, false);
+            arquivo.toFile().setReadable(true, true);
+            arquivo.toFile().setWritable(false, false);
+            arquivo.toFile().setWritable(true, true);
+        }
+        Files.writeString(arquivo, "client_id: " + credenciais.clientId()
+                + "\nclient_secret: " + credenciais.clientSecret() + "\n");
+        return arquivo;
     }
 }
