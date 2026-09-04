@@ -83,7 +83,9 @@ public class WebhookNotifierService {
             } catch (Exception e) {
                 log.warn("Falha ao entregar webhook em {} na tentativa {}/{}: {}", webhookUrl, tentativa, MAX_TENTATIVAS, e.getMessage());
             }
-            aguardarAntesDaProximaTentativa(tentativa);
+            if (!aguardarAntesDaProximaTentativa(tentativa)) {
+                return false; // FIS-87: thread interrompida durante o backoff - nao tenta de novo
+            }
         }
         log.error("Webhook {} nao pode ser entregue apos {} tentativas", webhookUrl, MAX_TENTATIVAS);
         return false;
@@ -100,11 +102,14 @@ public class WebhookNotifierService {
         }
     }
 
-    private void aguardarAntesDaProximaTentativa(int tentativa) {
+    /** @return true se o backoff terminou normalmente; false se a thread foi interrompida (o chamador deve parar de tentar). */
+    private boolean aguardarAntesDaProximaTentativa(int tentativa) {
         try {
             Thread.sleep(Duration.ofSeconds((long) Math.pow(2, tentativa)).toMillis());
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 }

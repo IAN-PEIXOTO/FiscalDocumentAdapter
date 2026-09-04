@@ -99,7 +99,15 @@ public class EmissaoAssincronaWorker {
             falhar(jobId, erroTerminal);
         }
 
-        notificarWebhook(jobId, resultado, erroTerminal);
+        // FIS-87: fora do try/catch acima de proposito (o estado do job ja foi decidido e
+        // persistido em concluir/falhar) - mas uma falha inesperada aqui (ex.: erro ao montar o
+        // payload) nao pode propagar para processarPendentes() e interromper o processamento dos
+        // demais jobs do lote atual.
+        try {
+            notificarWebhook(jobId, resultado, erroTerminal);
+        } catch (Exception e) {
+            log.error("Falha inesperada ao notificar webhook da emissao assincrona {}", jobId, e);
+        }
     }
 
     /** @return true se reagendou (ainda ha tentativas disponiveis), false se esgotou (chamador deve marcar FALHA). */
