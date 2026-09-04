@@ -9,7 +9,6 @@ import com.fiscaladapter.sefaz.nfe.RetornoDistribuicaoDfe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,7 +50,14 @@ public class DistribuicaoDfeService {
         this.client = client;
     }
 
-    @Transactional
+    /**
+     * Sem @Transactional (FIS-77): o loop abaixo faz ate MAX_PAGINAS_POR_CONSULTA chamadas SOAP
+     * sequenciais a SEFAZ (timeout de 60s cada) - uma transacao Spring envolvendo o metodo inteiro
+     * seguraria uma conexao do pool HikariCP por I/O de rede puro, sem nenhuma operacao de banco
+     * acontecendo nesse meio tempo, podendo esgotar o pool sob poucas consultas concorrentes. A
+     * unica escrita (repository.save no fim) e atomica por si so (JpaRepository.save() ja roda
+     * numa transacao propria).
+     */
     public List<NfeDestinadaResponse> consultarDestinadas(String cnpj, String ufAutor, TipoAmbiente ambiente,
                                                            CertificadoCarregado certificado) {
         DistribuicaoDfeCursor cursor = repository.findByCnpj(cnpj).orElseGet(() -> new DistribuicaoDfeCursor(cnpj));
