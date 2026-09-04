@@ -9,6 +9,9 @@ import java.net.http.HttpClient;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Monta um HttpClient com autenticacao mTLS usando o certificado do emissor
@@ -26,7 +29,29 @@ import java.time.Duration;
 @Component
 public class SefazHttpClientFactory {
 
+    /**
+     * Cache por instancia de certificado carregado (FIS-78): monta o HttpClient/SSLContext uma
+     * unica vez e reaproveita entre as varias chamadas SOAP que uma mesma operacao faz com o
+     * MESMO CertificadoCarregado (ex.: tentativa normal + contingencia + EPEC + consulta de prazo
+     * de cancelamento, todas na mesma emissao/consulta) - evita repetir o parsing do keystore
+     * PKCS12 e a inicializacao do SSLContext a cada chamada individual.
+     *
+     * Chave fraca (WeakHashMap, com acesso sincronizado pois WeakHashMap nao e thread-safe): o
+     * certificado e recarregado a cada chamada a CertificadoEmissorService.carregar, entao nao ha
+     * um unico CertificadoCarregado de vida longa para cachear por CNPJ - em vez disso, a entrada
+     * e valida so enquanto o proprio CertificadoCarregado (com a chave privada em memoria) ainda
+     * estiver referenciado em algum lugar (ex.: durante o processamento da requisicao atual); ao
+     * ser coletado pelo GC, a entrada correspondente (e o SSLContext associado) tambem some, sem
+     * exigir um TTL/limite de tamanho explicito nem prolongar a vida do material de chave privada.
+     */
+    private final Map<CertificadoCarregado, HttpClient> cachePorCertificado =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     public HttpClient criar(CertificadoCarregado certificado) {
+        return cachePorCertificado.computeIfAbsent(certificado, this::montar);
+    }
+
+    private HttpClient montar(CertificadoCarregado certificado) {
         try {
             char[] senhaEfemera = "senha-em-memoria".toCharArray();
 
