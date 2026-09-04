@@ -157,18 +157,19 @@ assinado digitalmente logo em seguida.
 ## 5. Vínculo com MDF-e
 
 A consulta expõe `mdfeVinculado`: como a SEFAZ não devolve esse vínculo na consulta de
-situação do CT-e (só o próprio MDF-e sabe quais CT-e transporta), o adapter varre os
-MDF-e já arquivados pelo mesmo CNPJ emissor (a transportadora é sempre a mesma nos dois
-documentos) procurando uma referência à chave deste CT-e.
+situação do CT-e (só o próprio MDF-e sabe quais CT-e transporta), o adapter mantém um
+índice próprio (`chave_cte` → `chave_mdfe`) gravado no momento da emissão do MDF-e, a
+partir das chaves de CT-e que ele declara transportar — a consulta do CT-e é então uma
+busca direta por essa chave, sem precisar descriptografar o histórico do emissor.
 
 Cancelar um CT-e já incluído em um MDF-e é bloqueado — deixaria o manifesto
 referenciando um documento inexistente perante o fisco; o procedimento correto é
 cancelar ou encerrar o MDF-e vinculado primeiro (ver
 [manual-mdfe.md](manual-mdfe.md)).
 
-> **Limitação conhecida**: o arquivamento legal guarda só o XML autorizado, sem status
-> de cancelamento — o bloqueio vale enquanto existir qualquer MDF-e autorizado que
-> referencie o CT-e, mesmo que esse MDF-e tenha sido cancelado depois.
+> **Limitação conhecida**: o índice guarda só o vínculo no momento da emissão do MDF-e,
+> sem status de cancelamento — o bloqueio vale enquanto existir qualquer MDF-e autorizado
+> que referencie o CT-e, mesmo que esse MDF-e tenha sido cancelado depois.
 
 ## 6. DACTE
 

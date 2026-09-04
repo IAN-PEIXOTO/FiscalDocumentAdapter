@@ -10,6 +10,7 @@ import com.fiscaladapter.documento.mdfe.MdfeXsdValidator;
 import com.fiscaladapter.documento.mdfe.damdfe.DadosImpressaoDamdfe;
 import com.fiscaladapter.documento.mdfe.damdfe.DamdfeGenerator;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
+import com.fiscaladapter.mdfe.MdfeCteVinculoService;
 import com.fiscaladapter.numeracao.NumeracaoSequencialService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.mdfe.MdfeAutorizacaoClient;
@@ -42,12 +43,14 @@ public class MdfeEmissaoService {
     private final NumeracaoSequencialService numeracaoSequencialService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
     private final DamdfeGenerator damdfeGenerator;
+    private final MdfeCteVinculoService mdfeCteVinculoService;
 
     public MdfeEmissaoService(MdfeRequestMapper mapper, CertificadoEmissorService certificadoEmissorService,
                                ChaveAcessoService chaveAcessoService, MdfeXmlGenerator xmlGenerator,
                                AssinaturaXmlService assinaturaXmlService, MdfeXsdValidator xsdValidator,
                                MdfeAutorizacaoClient autorizacaoClient, NumeracaoSequencialService numeracaoSequencialService,
-                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService, DamdfeGenerator damdfeGenerator) {
+                               RetencaoDocumentoFiscalService retencaoDocumentoFiscalService, DamdfeGenerator damdfeGenerator,
+                               MdfeCteVinculoService mdfeCteVinculoService) {
         this.mapper = mapper;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
@@ -58,6 +61,7 @@ public class MdfeEmissaoService {
         this.numeracaoSequencialService = numeracaoSequencialService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
         this.damdfeGenerator = damdfeGenerator;
+        this.mdfeCteVinculoService = mdfeCteVinculoService;
     }
 
     public MdfeResponse processar(MdfePedidoEmissaoRequest pedido, String clientId) {
@@ -82,6 +86,8 @@ public class MdfeEmissaoService {
 
             retencaoDocumentoFiscalService.arquivar(chaveAcesso, mdfe.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.MDFE, autorizacao.numeroProtocolo(), xmlAssinado, mdfe.identificacao().dataEmissao());
+
+            mdfeCteVinculoService.registrar(chaveAcesso, mdfe.chavesCteTransportados());
         }
 
         RejeicaoSefaz rejeicao = !autorizacao.autorizada()

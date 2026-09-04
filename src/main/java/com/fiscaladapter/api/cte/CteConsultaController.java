@@ -3,9 +3,9 @@ package com.fiscaladapter.api.cte;
 import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
-import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
+import com.fiscaladapter.mdfe.MdfeCteVinculoService;
 import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.cte.CteCancelamentoClient;
 import com.fiscaladapter.sefaz.cte.CteConsultaProtocoloClient;
@@ -40,7 +40,6 @@ import java.util.regex.Pattern;
 public class CteConsultaController {
 
     private static final Pattern TAG_CHAVE_NFE = Pattern.compile("<infNFe>\\s*<chave>(\\d{44})</chave>\\s*</infNFe>");
-    private static final Pattern TAG_CHAVE_CTE_NO_MDFE = Pattern.compile("<infCTe>\\s*<chCTe>(\\d{44})</chCTe>\\s*</infCTe>");
     /** Ajuste SINIEF 09/07, clausula 14 - algumas UFs adotam prazo menor (FIS-44). */
     private static final Duration PRAZO_CANCELAMENTO_CTE = Duration.ofHours(168);
 
@@ -49,17 +48,20 @@ public class CteConsultaController {
     private final CertificadoEmissorService certificadoEmissorService;
     private final ChaveAcessoService chaveAcessoService;
     private final RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private final MdfeCteVinculoService mdfeCteVinculoService;
 
     public CteConsultaController(CteConsultaProtocoloClient consultaProtocoloClient,
                                   CteCancelamentoClient cancelamentoClient,
                                   CertificadoEmissorService certificadoEmissorService,
                                   ChaveAcessoService chaveAcessoService,
-                                  RetencaoDocumentoFiscalService retencaoDocumentoFiscalService) {
+                                  RetencaoDocumentoFiscalService retencaoDocumentoFiscalService,
+                                  MdfeCteVinculoService mdfeCteVinculoService) {
         this.consultaProtocoloClient = consultaProtocoloClient;
         this.cancelamentoClient = cancelamentoClient;
         this.certificadoEmissorService = certificadoEmissorService;
         this.chaveAcessoService = chaveAcessoService;
         this.retencaoDocumentoFiscalService = retencaoDocumentoFiscalService;
+        this.mdfeCteVinculoService = mdfeCteVinculoService;
     }
 
     @PostMapping("/api/v1/cte/{chaveAcesso}/consulta")
@@ -117,20 +119,14 @@ public class CteConsultaController {
     }
 
     /**
-     * "Eventos vinculados" (FIS-53, criterio de aceite 1): varre os MDF-e ja arquivados por este
-     * adapter para o mesmo CNPJ emissor do CT-e (a transportadora e sempre a mesma nos dois
-     * documentos) procurando uma referencia a chave deste CT-e em infCTe/chCTe. A SEFAZ nao
-     * devolve esse vinculo na consulta de situacao do CT-e - so o proprio MDF-e sabe quais CT-e
-     * ele transporta.
+     * "Eventos vinculados" (FIS-53, criterio de aceite 1): consulta indexada por chave de CT-e
+     * (FIS-61) - o vinculo e gravado por MdfeEmissaoService no momento da emissao do MDF-e, em
+     * vez de varrer e descriptografar todos os MDF-e arquivados do emissor a cada chamada. A
+     * SEFAZ nao devolve esse vinculo na consulta de situacao do CT-e - so o proprio MDF-e sabe
+     * quais CT-e ele transporta.
      */
     private String mdfeVinculado(String chaveCte) {
-        String cnpjEmissor = chaveAcessoService.cnpjEmitente(chaveCte);
-        return retencaoDocumentoFiscalService.recuperarPorEmissorETipo(cnpjEmissor, TipoDocumentoFiscal.MDFE).stream()
-                .filter(mdfe -> TAG_CHAVE_CTE_NO_MDFE.matcher(mdfe.xmlAssinado()).results()
-                        .anyMatch(r -> r.group(1).equals(chaveCte)))
-                .map(RetencaoDocumentoFiscalService.DocumentoRecuperado::chaveAcesso)
-                .findFirst()
-                .orElse(null);
+        return mdfeCteVinculoService.mdfeVinculado(chaveCte);
     }
 
     /**

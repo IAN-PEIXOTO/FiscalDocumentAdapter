@@ -5,9 +5,8 @@ import com.fiscaladapter.api.nfe.EmitRequest;
 import com.fiscaladapter.api.nfe.EnderecoNfeRequest;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
-import com.fiscaladapter.documento.TipoDocumentoFiscal;
 import com.fiscaladapter.documento.cte.TipoTomadorServico;
-import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
+import com.fiscaladapter.mdfe.MdfeCteVinculoService;
 import com.fiscaladapter.sefaz.cte.CteAutorizacaoClient;
 import com.fiscaladapter.sefaz.cte.CteCancelamentoClient;
 import com.fiscaladapter.sefaz.cte.CteConsultaProtocoloClient;
@@ -67,7 +66,7 @@ class CteConsultaControllerTest {
     private CertificadoEmissorService certificadoEmissorService;
 
     @Autowired
-    private RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
+    private MdfeCteVinculoService mdfeCteVinculoService;
 
     @MockBean
     private CteAutorizacaoClient autorizacaoClient;
@@ -166,11 +165,7 @@ class CteConsultaControllerTest {
 
     private String arquivarMdfeQueTransportaOCte() {
         String chaveMdfe = "35260" + CNPJ_EMISSOR + "580010000000900" + "1" + "23456789";
-        String xmlMdfeFicticio = "<MDFe><infMDFe><infDoc><infMunDescarga>"
-                + "<infCTe><chCTe>" + chaveAcessoCteEmitido + "</chCTe></infCTe>"
-                + "</infMunDescarga></infDoc></infMDFe></MDFe>";
-        retencaoDocumentoFiscalService.arquivar(chaveMdfe, CNPJ_EMISSOR, TipoDocumentoFiscal.MDFE,
-                "935260000000001", xmlMdfeFicticio, LocalDate.of(2026, 3, 16));
+        mdfeCteVinculoService.registrar(chaveMdfe, List.of(chaveAcessoCteEmitido));
         return chaveMdfe;
     }
 
