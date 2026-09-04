@@ -88,7 +88,7 @@ public class NfeEpecClient {
                 + "<dhEmi>" + nfe.identificacao().dataEmissao()
                         .atStartOfDay(java.time.ZoneId.systemDefault()).format(DATA_EVENTO_FORMAT) + "</dhEmi>"
                 + "<tpNF>1</tpNF>"
-                + "<IE>" + nfe.emitente().inscricaoEstadual() + "</IE>"
+                + "<IE>" + escaparXml(nfe.emitente().inscricaoEstadual()) + "</IE>"
                 + destinatario(nfe.destinatario())
                 + "<vNF>" + moeda(nfe.valorTotalNota()) + "</vNF>"
                 + "<vICMS>" + moeda(nfe.valorTotalIcms()) + "</vICMS>"
@@ -113,13 +113,17 @@ public class NfeEpecClient {
     private String destinatario(Destinatario destinatario) {
         String tagDocumento = destinatario.ehPessoaJuridica() ? "CNPJ" : "CPF";
         String tagIe = destinatario.inscricaoEstadual() != null
-                ? "<IE>" + destinatario.inscricaoEstadual() + "</IE>"
+                ? "<IE>" + escaparXml(destinatario.inscricaoEstadual()) + "</IE>"
                 : "";
         return "<dest>"
-                + "<UF>" + destinatario.endereco().uf() + "</UF>"
+                + "<UF>" + escaparXml(destinatario.endereco().uf()) + "</UF>"
                 + "<" + tagDocumento + ">" + destinatario.documentoSemMascara() + "</" + tagDocumento + ">"
                 + tagIe
                 + "</dest>";
+    }
+
+    private String escaparXml(String texto) {
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private String extrairCnpjDoCertificado(CertificadoCarregado certificado) {
@@ -129,10 +133,8 @@ public class NfeEpecClient {
         throw new SefazComunicacaoException("Nao foi possivel determinar o CNPJ do autor do evento a partir do certificado");
     }
 
+    /** TDec_1302 (schema NF-e) exige 2 casas decimais fixas, mesmo para zero - notas isentas/sem ICMS destacado (FIS-76). */
     private String moeda(BigDecimal valor) {
-        if (valor.compareTo(BigDecimal.ZERO) == 0) {
-            return "0";
-        }
         return valor.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 

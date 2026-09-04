@@ -4,6 +4,9 @@ import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoDigitalService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.documento.nfe.Destinatario;
+import com.fiscaladapter.documento.nfe.Emitente;
+import com.fiscaladapter.documento.nfe.Endereco;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronicaTestFixture;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
@@ -54,6 +57,63 @@ class NfeEpecClientTest {
 
             assertThat(resposta.registrada()).isTrue();
             assertThat(resposta.codigoStatus()).isEqualTo("136");
+        }
+    }
+
+    /** FIS-67: IE do emitente/destinatario e UF do destinatario iam direto no XML sem escape. */
+    @Test
+    void deveEscaparCaracteresEspeciaisNoEventoEpec() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        NotaFiscalEletronica nfeBase = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+
+        String iePerigosa = "111222333</IE><Injetado>x</Injetado><IE>2";
+        Emitente emitenteComIePerigosa = new Emitente(nfeBase.emitente().cnpj(), nfeBase.emitente().razaoSocial(),
+                nfeBase.emitente().nomeFantasia(), iePerigosa, nfeBase.emitente().regimeTributario(),
+                nfeBase.emitente().endereco());
+
+        Endereco enderecoComUfPerigosa = new Endereco(nfeBase.destinatario().endereco().logradouro(),
+                nfeBase.destinatario().endereco().numero(), nfeBase.destinatario().endereco().bairro(),
+                nfeBase.destinatario().endereco().codigoMunicipio(), nfeBase.destinatario().endereco().municipio(),
+                "SP</UF><Injetado>y</Injetado><UF>SP", nfeBase.destinatario().endereco().cep(),
+                nfeBase.destinatario().endereco().telefone());
+        Destinatario destinatarioComCamposPerigosos = new Destinatario(nfeBase.destinatario().cpfOuCnpj(),
+                nfeBase.destinatario().razaoSocial(), nfeBase.destinatario().indicadorInscricaoEstadual(),
+                "987</IE><Injetado>z</Injetado><IE>654", nfeBase.destinatario().email(), enderecoComUfPerigosa);
+
+        NotaFiscalEletronica nfeAdulterada = new NotaFiscalEletronica(nfeBase.identificacao(), emitenteComIePerigosa,
+                destinatarioComCamposPerigosos, nfeBase.itens(), nfeBase.pagamentos());
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).doesNotContain("<Injetado>")
+                    .contains("&lt;Injetado&gt;x&lt;/Injetado&gt;")
+                    .contains("&lt;Injetado&gt;y&lt;/Injetado&gt;")
+                    .contains("&lt;Injetado&gt;z&lt;/Injetado&gt;");
+            return RESPOSTA_EPEC_REGISTRADO;
+        })) {
+            HttpClient httpClient = new SefazHttpClientFactory()
+                    .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+            NfeEpecClient client = new NfeEpecClient(null, null, new AssinaturaXmlService());
+            client.registrar(servidor.url(), nfeAdulterada, CHAVE_ACESSO, TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
+        }
+    }
+
+    /** FIS-76: TDec_1302 exige 2 casas decimais fixas mesmo para zero (notas isentas/sem ICMS destacado). */
+    @Test
+    void deveFormatarValoresMonetariosZeroComDuasCasasDecimais() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaComImposto(
+                NotaFiscalEletronicaTestFixture.impostoIcms40Isenta());
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).contains("<vICMS>0.00</vICMS>").contains("<vST>0.00</vST>").doesNotContain("<vICMS>0<");
+            return RESPOSTA_EPEC_REGISTRADO;
+        })) {
+            HttpClient httpClient = new SefazHttpClientFactory()
+                    .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+            NfeEpecClient client = new NfeEpecClient(null, null, new AssinaturaXmlService());
+            client.registrar(servidor.url(), nfe, CHAVE_ACESSO, TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
         }
     }
 
