@@ -42,9 +42,11 @@ public class WebhookNotifierService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
     private final ObjectMapper objectMapper;
+    private final WebhookUrlValidator webhookUrlValidator;
 
-    public WebhookNotifierService(ObjectMapper objectMapper) {
+    public WebhookNotifierService(ObjectMapper objectMapper, WebhookUrlValidator webhookUrlValidator) {
         this.objectMapper = objectMapper;
+        this.webhookUrlValidator = webhookUrlValidator;
     }
 
     /**
@@ -65,6 +67,13 @@ public class WebhookNotifierService {
 
         for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
             try {
+                // FIS-90: a URL era validada (bloqueio de SSRF, ver WebhookUrlValidator) so no
+                // cadastro do webhook; um dominio que resolvia para um IP publico naquele momento
+                // pode ter seu DNS trocado depois para apontar a um endereco interno (DNS
+                // rebinding), contornando a protecao do FIS-68. Revalidar aqui, imediatamente
+                // antes de cada tentativa de envio, fecha essa janela.
+                webhookUrlValidator.validar(webhookUrl);
+
                 HttpRequest.Builder requisicao = HttpRequest.newBuilder()
                         .uri(URI.create(webhookUrl))
                         .timeout(Duration.ofSeconds(15))
@@ -80,6 +89,13 @@ public class WebhookNotifierService {
                     return true;
                 }
                 log.warn("Webhook {} respondeu HTTP {} na tentativa {}/{}", webhookUrl, resposta.statusCode(), tentativa, MAX_TENTATIVAS);
+            } catch (IllegalArgumentException e) {
+                // URL passou a apontar para um endereco interno/privado desde o cadastro (ou
+                // resolucao DNS mudou entre tentativas) - nao adianta tentar de novo, a URL em si
+                // e o problema, nao uma falha transitoria de rede.
+                log.error("Webhook {} bloqueado por apontar para endereco interno/privado, entrega cancelada: {}",
+                        webhookUrl, e.getMessage());
+                return false;
             } catch (Exception e) {
                 log.warn("Falha ao entregar webhook em {} na tentativa {}/{}: {}", webhookUrl, tentativa, MAX_TENTATIVAS, e.getMessage());
             }

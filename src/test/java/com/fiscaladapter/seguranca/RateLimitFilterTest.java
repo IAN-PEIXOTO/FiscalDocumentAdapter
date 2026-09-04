@@ -8,6 +8,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,10 +62,37 @@ class RateLimitFilterTest {
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
+    @Test
+    void deveAplicarLimiteQuandoClientIdVemDoHeaderAuthorizationBasic() throws Exception {
+        // FIS-89: client_id de HTTP Basic (metodo CLIENT_SECRET_BASIC, o unico usado de fato pelos
+        // clientes contra /oauth2/token) viaja no header Authorization, nao como parametro - sem
+        // ler esse header, toda tentativa aqui teria clientId nulo e nunca esbarraria no limite,
+        // permitindo brute-force irrestrito do client_secret.
+        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(
+                "cliente-basic:tentativa-de-secret".getBytes(StandardCharsets.UTF_8));
+
+        for (int i = 0; i < 60; i++) {
+            assertThat(chamarFiltroComBasicAuth(basicAuth)).isTrue();
+        }
+
+        assertThat(chamarFiltroComBasicAuth(basicAuth)).isFalse();
+    }
+
     /** @return true se a requisicao passou (chain.doFilter chamado), false se foi bloqueada com 429. */
     private boolean chamarFiltro(String clientIdParam) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setParameter("client_id", clientIdParam);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        return response.getStatus() != 429;
+    }
+
+    private boolean chamarFiltroComBasicAuth(String basicAuthHeader) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", basicAuthHeader);
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 

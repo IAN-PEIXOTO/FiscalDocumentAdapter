@@ -10,7 +10,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,17 +48,42 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * A identidade autenticada (quando disponivel) tem prioridade sobre o parametro de request
      * "client_id" (FIS-69): no filtro da API de recursos, o token Bearer ja foi validado antes
      * deste filtro rodar, entao usar "client_id" ali permitiria a um cliente autenticado escapar
-     * do proprio limite so variando esse parametro a cada chamada. O fallback para o parametro
-     * so se aplica ao endpoint /oauth2/token (RateLimitFilter tambem roda no chain do
-     * Authorization Server), onde o client_id e o proprio identificador do requerente e ainda nao
-     * ha uma Authentication populada nesse ponto do fluxo OAuth2 client_credentials.
+     * do proprio limite so variando esse parametro a cada chamada. O fallback so se aplica ao
+     * endpoint /oauth2/token (RateLimitFilter tambem roda no chain do Authorization Server), onde
+     * o client_id e o proprio identificador do requerente e ainda nao ha uma Authentication
+     * populada nesse ponto do fluxo OAuth2 client_credentials.
+     *
+     * FIS-89: nesse fallback, o client_id tambem precisa ser lido do header "Authorization: Basic"
+     * (metodo CLIENT_SECRET_BASIC, o unico registrado em ClienteApiRegisteredClientRepository e o
+     * unico usado pelos clientes de fato) - so olhar o parametro de request deixava toda tentativa
+     * via Basic auth com clientId nulo, escapando do rate limit e permitindo brute-force irrestrito
+     * do client_secret.
      */
     private String identificarCliente(HttpServletRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null) {
             return auth.getName();
         }
+        String clientIdDoBasicAuth = extrairClientIdDoBasicAuth(request);
+        if (clientIdDoBasicAuth != null) {
+            return clientIdDoBasicAuth;
+        }
         return request.getParameter("client_id");
+    }
+
+    private String extrairClientIdDoBasicAuth(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.regionMatches(true, 0, "Basic ", 0, 6)) {
+            return null;
+        }
+        try {
+            String credenciais = new String(Base64.getDecoder().decode(header.substring(6).trim()), StandardCharsets.UTF_8);
+            int separador = credenciais.indexOf(':');
+            String clientId = separador < 0 ? credenciais : credenciais.substring(0, separador);
+            return URLDecoder.decode(clientId, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return null; // header Basic malformado - deixa o fallback de parametro/limite generico decidir
+        }
     }
 
     private boolean excedeuLimite(String clientId) {
