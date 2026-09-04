@@ -47,6 +47,29 @@ class CriptografiaEmRepousoServiceTest {
     }
 
     @Test
+    void deveCriptografarEDescriptografarSegredoComoCharArray() {
+        // FIS-63: senha de certificado deve poder ir e voltar sem nunca existir como String.
+        char[] senhaOriginal = "senha-do-certificado-A1".toCharArray();
+
+        String criptografado = servico.criptografarSensivel(senhaOriginal);
+        char[] senhaRecuperada = servico.descriptografarSensivel(criptografado);
+
+        assertThat(senhaRecuperada).isEqualTo("senha-do-certificado-A1".toCharArray());
+    }
+
+    @Test
+    void cadaChamadaDeCriptografarSensivelDeveGerarCiphertextDiferente() {
+        char[] senha = "senha-repetida".toCharArray();
+
+        String primeiro = servico.criptografarSensivel(senha);
+        String segundo = servico.criptografarSensivel(senha);
+
+        assertThat(primeiro).isNotEqualTo(segundo);
+        assertThat(servico.descriptografarSensivel(primeiro)).isEqualTo(senha);
+        assertThat(servico.descriptografarSensivel(segundo)).isEqualTo(senha);
+    }
+
+    @Test
     void deveRejeitarChaveComTamanhoInvalido() {
         String chaveCurta = Base64.getEncoder().encodeToString("chave-curta".getBytes());
 

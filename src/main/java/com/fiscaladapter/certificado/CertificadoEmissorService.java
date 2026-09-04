@@ -48,7 +48,7 @@ public class CertificadoEmissorService {
 
         String p12Criptografado = Base64.getEncoder()
                 .encodeToString(criptografiaEmRepousoService.criptografarBytes(arquivoP12));
-        String senhaCriptografada = criptografiaEmRepousoService.criptografar(new String(senha));
+        String senhaCriptografada = criptografiaEmRepousoService.criptografarSensivel(senha);
 
         repository.findByCnpj(info.cnpj()).ifPresentOrElse(
                 existente -> existente.atualizarDadosDoCertificado(info, p12Criptografado, senhaCriptografada),
@@ -66,9 +66,7 @@ public class CertificadoEmissorService {
 
         byte[] arquivoP12 = criptografiaEmRepousoService
                 .descriptografarBytes(Base64.getDecoder().decode(registro.getP12Criptografado()));
-        char[] senha = criptografiaEmRepousoService
-                .descriptografar(registro.getSenhaCriptografada())
-                .toCharArray();
+        char[] senha = criptografiaEmRepousoService.descriptografarSensivel(registro.getSenhaCriptografada());
 
         try {
             CertificadoCarregado certificado = certificadoDigitalService.carregar(new ByteArrayInputStream(arquivoP12), senha);

@@ -6,9 +6,12 @@ import org.springframework.stereotype.Service;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 
 /**
@@ -81,5 +84,49 @@ public class CriptografiaEmRepousoService {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Falha ao descriptografar dado sensivel - chave incorreta ou dado corrompido", e);
         }
+    }
+
+    /**
+     * Variante para segredos como senha de certificado (FIS-63): converte o char[] direto para
+     * byte[] (sem passar por String, que e imutavel e nao pode ser zerada) e zera o buffer
+     * intermediario assim que a criptografia termina.
+     */
+    public String criptografarSensivel(char[] segredo) {
+        byte[] bytes = charsParaBytesUtf8(segredo);
+        try {
+            return Base64.getEncoder().encodeToString(criptografarBytes(bytes));
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
+    }
+
+    /** Contraparte de {@link #criptografarSensivel(char[])} - devolve o segredo direto como char[], nunca como String. */
+    public char[] descriptografarSensivel(String segredoCriptografado) {
+        byte[] bytes = descriptografarBytes(Base64.getDecoder().decode(segredoCriptografado));
+        try {
+            return bytesParaCharsUtf8(bytes);
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
+    }
+
+    private static byte[] charsParaBytesUtf8(char[] chars) {
+        ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(CharBuffer.wrap(chars));
+        byte[] bytes = new byte[byteBuffer.remaining()];
+        byteBuffer.get(bytes);
+        if (byteBuffer.hasArray()) {
+            Arrays.fill(byteBuffer.array(), (byte) 0);
+        }
+        return bytes;
+    }
+
+    private static char[] bytesParaCharsUtf8(byte[] bytes) {
+        CharBuffer charBuffer = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(bytes));
+        char[] chars = new char[charBuffer.remaining()];
+        charBuffer.get(chars);
+        if (charBuffer.hasArray()) {
+            Arrays.fill(charBuffer.array(), '\0');
+        }
+        return chars;
     }
 }
