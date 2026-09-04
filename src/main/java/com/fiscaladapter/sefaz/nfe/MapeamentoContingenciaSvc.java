@@ -7,16 +7,17 @@ import java.util.Map;
  * apenas UM SVC oficialmente designado - a outra SVC nao aceita documentos
  * daquela UF.
  *
- * ATENCAO: nao encontrei uma tabela oficial unica e facilmente verificavel
- * para todas as 27 UFs nesta sessao (o portal da NFe nao expos isso de forma
- * simples de consultar, e o INI do ACBr nao contem esse mapeamento - so os
- * enderecos dos SVCs em si). Esta tabela foi montada a partir de fontes
- * secundarias (blogs/wikis de fornecedores fiscais) com apenas um ponto
- * confirmado contra fonte primaria (PE -> SVC-RS, confirmado na pagina
- * oficial da SEFAZ-PE). Os totais batem (18 UFs em SVC-AN + 9 em SVC-RS =
- * 27), o que da alguma confianca estrutural, mas os pares individuais NAO
- * foram todos verificados contra o portal oficial da NFe. Revalidar antes
- * de depender disso em producao.
+ * Revalidado (FIS-75): confirmado contra a pagina oficial da SPED-MG
+ * (portalsped.fazenda.mg.gov.br/spedmg/nfe/Perguntas-Frequentes/respostas_ix)
+ * e contra a declaracao oficial da SEFAZ-PI ("a SEFAZ-PI passou a utilizar a
+ * Sefaz Virtual do Rio Grande do Sul") - ambas as fontes concordam entre si
+ * e corrigem dois pares que estavam errados na versao anterior desta tabela:
+ * PA e PI pertencem a SVC-RS, nao a SVC-AN. PE -> SVC-RS continua confirmado
+ * na pagina oficial da SEFAZ-PE, como ja estava. Nao foi possivel acessar
+ * diretamente a Nota Tecnica 2013.007 (redirecionamento em loop no portal da
+ * NFe) para uma terceira confirmacao primaria; as duas fontes secundarias
+ * usadas sao paginas oficiais de orgaos de fazenda estaduais, nao blogs/wikis
+ * de terceiros. Total bate: 16 UFs em SVC-AN + 11 em SVC-RS = 27.
  */
 public final class MapeamentoContingenciaSvc {
 
@@ -27,9 +28,7 @@ public final class MapeamentoContingenciaSvc {
             Map.entry("DF", ServicoContingenciaSvc.SVC_AN),
             Map.entry("ES", ServicoContingenciaSvc.SVC_AN),
             Map.entry("MG", ServicoContingenciaSvc.SVC_AN),
-            Map.entry("PA", ServicoContingenciaSvc.SVC_AN),
             Map.entry("PB", ServicoContingenciaSvc.SVC_AN),
-            Map.entry("PI", ServicoContingenciaSvc.SVC_AN),
             Map.entry("RJ", ServicoContingenciaSvc.SVC_AN),
             Map.entry("RN", ServicoContingenciaSvc.SVC_AN),
             Map.entry("RO", ServicoContingenciaSvc.SVC_AN),
@@ -46,7 +45,9 @@ public final class MapeamentoContingenciaSvc {
             Map.entry("MA", ServicoContingenciaSvc.SVC_RS),
             Map.entry("MS", ServicoContingenciaSvc.SVC_RS),
             Map.entry("MT", ServicoContingenciaSvc.SVC_RS),
+            Map.entry("PA", ServicoContingenciaSvc.SVC_RS),
             Map.entry("PE", ServicoContingenciaSvc.SVC_RS),
+            Map.entry("PI", ServicoContingenciaSvc.SVC_RS),
             Map.entry("PR", ServicoContingenciaSvc.SVC_RS)
     );
 
