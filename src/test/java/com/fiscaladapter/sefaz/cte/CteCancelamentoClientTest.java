@@ -50,6 +50,28 @@ class CteCancelamentoClientTest {
         }
     }
 
+    /** FIS-58: numeroProtocolo nao pode contrabandear marcacao dentro do evento assinado. */
+    @Test
+    void deveEscaparNumeroProtocoloAoCancelar() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        String protocoloMalicioso = "135260000000001</nProt><Injetado>x</Injetado><nProt>2";
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).doesNotContain("<Injetado>");
+            assertThat(req).contains("&lt;Injetado&gt;");
+            return RESPOSTA_CANCELADO;
+        })) {
+            HttpClient httpClient = new SefazHttpClientFactory()
+                    .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+            CteCancelamentoClient client = new CteCancelamentoClient(null, null, new com.fiscaladapter.assinatura.AssinaturaXmlService());
+            CancelamentoResponse resposta = client.cancelar(servidor.url(), CHAVE_ACESSO, protocoloMalicioso,
+                    "Erro na contratacao do servico de transporte", "SP", TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
+
+            assertThat(resposta.cancelado()).isTrue();
+        }
+    }
+
     @Test
     void deveRejeitarJustificativaCurta() throws Exception {
         CertificadoCarregado certificado = certificadoDeTeste();

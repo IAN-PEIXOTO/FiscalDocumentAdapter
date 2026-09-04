@@ -219,6 +219,10 @@ prazo** (diferente de NFC-e/CT-e/MDF-e, onde o prazo é uniforme o bastante para
 localmente); a SEFAZ é quem decide se aceita, e o `codigoStatusSefaz`/`motivoSefaz`
 refletem a decisão dela.
 
+**Validação de entrada (FIS-58)**: `numeroProtocolo` deve conter só dígitos (HTTP 400
+caso contrário) - é concatenado diretamente no XML do evento de cancelamento, que é
+assinado digitalmente logo em seguida.
+
 ### 7.3 Carta de Correção Eletrônica (CC-e)
 
 ```

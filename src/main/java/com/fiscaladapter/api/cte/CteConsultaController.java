@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.cte;
 
+import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.documento.TipoDocumentoFiscal;
@@ -83,6 +84,7 @@ public class CteConsultaController {
                                                              @RequestParam String numeroProtocolo,
                                                              @RequestParam String justificativa,
                                                              Authentication authentication) {
+        ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         verificarPrazoDeCancelamento(chaveAcesso, uf, ambiente, certificado);

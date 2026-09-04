@@ -195,6 +195,22 @@ class CteConsultaControllerTest {
                 .andExpect(jsonPath("$.cancelado").value(true));
     }
 
+    /** FIS-58: numeroProtocolo e concatenado direto no XML do evento - deve ser rejeitado cedo se nao for numerico. */
+    @Test
+    @Order(6)
+    void deveRejeitarCancelamentoComNumeroProtocoloNaoNumerico() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/cte/" + chaveAcessoCteEmitido + "/cancelamento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "135</nProt><Injetado>x")
+                        .param("justificativa", "Erro na contratacao do servico de transporte")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("numeroProtocolo")));
+    }
+
     @Test
     @Order(3)
     void deveRejeitarCancelamentoDeCteForaDoPrazoDe168Horas() throws Exception {

@@ -200,6 +200,36 @@ class MdfeConsultaControllerTest {
                 .andExpect(jsonPath("$.cancelado").value(true));
     }
 
+    /** FIS-58: numeroProtocolo e concatenado direto no XML do evento - deve ser rejeitado cedo se nao for numerico. */
+    @Test
+    void deveRejeitarCancelamentoComNumeroProtocoloNaoNumerico() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeEmitido + "/cancelamento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "935</nProt><Injetado>x")
+                        .param("justificativa", "Erro no cadastro do veiculo de transporte")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("numeroProtocolo")));
+    }
+
+    /** FIS-58: codigoMunicipioEncerramento e concatenado direto no XML do evento - deve ser rejeitado cedo se nao for numerico. */
+    @Test
+    void deveRejeitarEncerramentoComCodigoMunicipioNaoNumerico() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/mdfe/" + chaveAcessoMdfeEmitido + "/encerramento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "935260000000001")
+                        .param("codigoMunicipioEncerramento", "3304557</cMun><Injetado>x")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("codigoMunicipioEncerramento")));
+    }
+
     @Test
     void deveRejeitarCancelamentoDeMdfeForaDoPrazoDe24Horas() throws Exception {
         String dhRecbto = OffsetDateTime.now().minusHours(26).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);

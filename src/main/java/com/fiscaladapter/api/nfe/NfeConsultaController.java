@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.nfe;
 
+import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.documento.nfe.ChaveAcessoService;
@@ -89,6 +90,7 @@ public class NfeConsultaController {
                                                               @RequestParam String numeroProtocolo,
                                                               @RequestParam String justificativa,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificadoCarregado = carregarCertificado(chaveAcesso, authentication);
 
         if (MODELO_NFCE.equals(chaveAcessoService.modeloDocumento(chaveAcesso))) {

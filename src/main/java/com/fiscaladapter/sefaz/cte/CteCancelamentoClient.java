@@ -85,7 +85,7 @@ public class CteCancelamentoClient {
                 + "<detEvento versaoEvento=\"" + VERSAO_EVENTO + "\">"
                 + "<evCancCTe>"
                 + "<descEvento>Cancelamento</descEvento>"
-                + "<nProt>" + numeroProtocolo + "</nProt>"
+                + "<nProt>" + escaparXml(numeroProtocolo) + "</nProt>"
                 + "<xJust>" + escaparXml(justificativa) + "</xJust>"
                 + "</evCancCTe>"
                 + "</detEvento>"

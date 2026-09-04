@@ -127,6 +127,21 @@ class NfeConsultaControllerTest {
                 .andExpect(jsonPath("$.cancelado").value(true));
     }
 
+    /** FIS-58: numeroProtocolo e concatenado direto no XML do evento - deve ser rejeitado cedo se nao for numerico. */
+    @Test
+    void deveRejeitarCancelamentoComNumeroProtocoloNaoNumerico() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe/" + CHAVE_ACESSO + "/cancelamento")
+                        .param("uf", "SP")
+                        .param("ambiente", "HOMOLOGACAO")
+                        .param("numeroProtocolo", "135</nProt><Injetado>x")
+                        .param("justificativa", "Erro de digitacao no valor do produto")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("numeroProtocolo")));
+    }
+
     @Test
     void deveEmitirCceERetornarProtocolo() throws Exception {
         when(cceClient.corrigir(any(), anyInt(), any(), any(), any(), any()))

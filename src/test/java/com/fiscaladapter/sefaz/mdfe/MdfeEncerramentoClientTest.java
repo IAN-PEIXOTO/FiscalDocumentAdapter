@@ -53,6 +53,31 @@ class MdfeEncerramentoClientTest {
         }
     }
 
+    /** FIS-58: numeroProtocolo e codigoMunicipioEncerramento nao podem contrabandear marcacao dentro do evento assinado. */
+    @Test
+    void deveEscaparNumeroProtocoloECodigoMunicipioAoEncerrar() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        String protocoloMalicioso = "935260000000001</nProt><Injetado>x</Injetado><nProt>2";
+        String municipioMalicioso = "3550308</cMun><OutroInjetado>y</OutroInjetado><cMun>0";
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).doesNotContain("<Injetado>").doesNotContain("<OutroInjetado>");
+            assertThat(req).contains("&lt;Injetado&gt;").contains("&lt;OutroInjetado&gt;");
+            return RESPOSTA_ENCERRADO;
+        })) {
+            HttpClient httpClient = new SefazHttpClientFactory()
+                    .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
+
+            MdfeEncerramentoClient client = new MdfeEncerramentoClient(null, null,
+                    new AssinaturaXmlService(), new MdfeEncerramentoXmlGenerator());
+
+            var resposta = client.encerrar(servidor.url(), CHAVE_ACESSO, protocoloMalicioso, "SP", municipioMalicioso,
+                    LocalDate.of(2026, 3, 20), TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
+
+            assertThat(resposta.encerrado()).isTrue();
+        }
+    }
+
     private CertificadoCarregado certificadoDeTeste() throws Exception {
         char[] senha = "senha123".toCharArray();
         byte[] p12 = TestCertificadoFactory.gerarP12("12345678000199", senha,

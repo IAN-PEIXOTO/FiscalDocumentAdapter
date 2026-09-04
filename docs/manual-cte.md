@@ -150,6 +150,10 @@ Bloqueado (**HTTP 422**) em duas situações:
 2. **Já manifestado em MDF-e** (`mdfeVinculado != null`, `CteJaManifestadoEmMdfeException`)
    — ver seção 5.
 
+**Validação de entrada (FIS-58)**: `numeroProtocolo` deve conter só dígitos (HTTP 400
+caso contrário) - é concatenado diretamente no XML do evento de cancelamento, que é
+assinado digitalmente logo em seguida.
+
 ## 5. Vínculo com MDF-e
 
 A consulta expõe `mdfeVinculado`: como a SEFAZ não devolve esse vínculo na consulta de

@@ -1,5 +1,6 @@
 package com.fiscaladapter.api.mdfe;
 
+import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.documento.mdfe.Mdfe;
@@ -120,6 +121,8 @@ public class MdfeConsultaController {
                                                               @RequestParam String codigoMunicipioEncerramento,
                                                               @RequestParam(required = false) LocalDate dataEncerramento,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
+        ValidacaoParametros.exigirSomenteDigitos(codigoMunicipioEncerramento, "codigoMunicipioEncerramento");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         LocalDate dataDeEncerramento = dataEncerramento != null ? dataEncerramento : LocalDate.now();
@@ -166,6 +169,7 @@ public class MdfeConsultaController {
                                                               @RequestParam String numeroProtocolo,
                                                               @RequestParam String justificativa,
                                                               Authentication authentication) {
+        ValidacaoParametros.exigirSomenteDigitos(numeroProtocolo, "numeroProtocolo");
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
         if (encerramentoRegistroService.estaEncerrado(chaveAcesso)) {

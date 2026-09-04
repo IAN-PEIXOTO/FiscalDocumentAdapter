@@ -154,6 +154,10 @@ usado para (a) bloquear cancelamento depois do encerramento (seção 6) e (b) re
 data/município de encerramento — reconstruído a partir do XML assinado já arquivado na
 emissão (este endpoint só recebe a chave de acesso, não o objeto original).
 
+**Validação de entrada (FIS-58)**: `numeroProtocolo` e `codigoMunicipioEncerramento`
+devem conter só dígitos (HTTP 400 caso contrário) - são concatenados diretamente no XML
+do evento de encerramento, que é assinado digitalmente logo em seguida.
+
 ## 6. Cancelamento
 
 ```

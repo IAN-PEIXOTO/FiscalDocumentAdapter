@@ -75,7 +75,7 @@ public class NfeCancelamentoClient {
                 + "<verEvento>1.00</verEvento>"
                 + "<detEvento versao=\"1.00\">"
                 + "<descEvento>Cancelamento</descEvento>"
-                + "<nProt>" + numeroProtocolo + "</nProt>"
+                + "<nProt>" + escaparXml(numeroProtocolo) + "</nProt>"
                 + "<xJust>" + escaparXml(justificativa) + "</xJust>"
                 + "</detEvento>"
                 + "</infEvento>"

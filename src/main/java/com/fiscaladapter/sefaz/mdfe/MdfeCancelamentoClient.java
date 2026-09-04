@@ -78,7 +78,7 @@ public class MdfeCancelamentoClient {
                 + "<detEvento versaoEvento=\"" + VERSAO_EVENTO + "\">"
                 + "<evCancMDFe>"
                 + "<descEvento>Cancelamento</descEvento>"
-                + "<nProt>" + numeroProtocolo + "</nProt>"
+                + "<nProt>" + escaparXml(numeroProtocolo) + "</nProt>"
                 + "<xJust>" + escaparXml(justificativa) + "</xJust>"
                 + "</evCancMDFe>"
                 + "</detEvento>"

@@ -41,13 +41,24 @@ public class MdfeEncerramentoXmlGenerator {
                 + "<detEvento versaoEvento=\"3.00\">"
                 + "<evEncMDFe>"
                 + "<descEvento>Encerramento</descEvento>"
-                + "<nProt>" + nProtocoloAutorizacao + "</nProt>"
+                + "<nProt>" + escaparXml(nProtocoloAutorizacao) + "</nProt>"
                 + "<dtEnc>" + dataEncerramento + "</dtEnc>"
                 + "<cUF>" + cUf + "</cUF>"
-                + "<cMun>" + codigoMunicipioEncerramento + "</cMun>"
+                + "<cMun>" + escaparXml(codigoMunicipioEncerramento) + "</cMun>"
                 + "</evEncMDFe>"
                 + "</detEvento>"
                 + "</infEvento>"
                 + "</eventoMDFe>";
+    }
+
+    /**
+     * Escapa os caracteres especiais de XML (FIS-58) - nProtocoloAutorizacao e
+     * codigoMunicipioEncerramento chegam como @RequestParam livre e sao concatenados direto no
+     * XML do evento (esta classe monta o XML na mao, sem um writer que escape automaticamente);
+     * sem isso, um valor como "</nProt><Malicioso>" quebraria/adulteraria a estrutura do evento
+     * assinado digitalmente logo em seguida.
+     */
+    private String escaparXml(String texto) {
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }
