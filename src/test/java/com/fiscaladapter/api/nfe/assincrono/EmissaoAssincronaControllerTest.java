@@ -120,16 +120,13 @@ class EmissaoAssincronaControllerTest {
         });
         servidorWebhook.start();
 
-        String accessToken = obterAccessToken();
-        String respostaWebhook = mockMvc.perform(put("/api/v1/webhook")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new com.fiscaladapter.webhook.WebhookUrlRequest(
-                                "http://localhost:" + servidorWebhook.getAddress().getPort() + "/webhook")))
-                        .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.secret").isNotEmpty())
-                .andReturn().getResponse().getContentAsString();
-        webhookSecret = objectMapper.readTree(respostaWebhook).get("secret").asText();
+        // FIS-68: o endpoint PUT /api/v1/webhook agora bloqueia URLs de webhook que apontem para
+        // loopback/rede interna (protecao contra SSRF), o que inclui de proposito o localhost
+        // usado aqui para simular o receptor do webhook em teste. Esse cadastro entao e feito
+        // direto pelo service (camada abaixo do WebhookUrlValidator, que so roda no controller),
+        // preservando a validacao real do endpoint HTTP sem impedir este teste de ponta a ponta.
+        webhookSecret = clienteApiService.definirWebhookUrl(clientId,
+                "http://localhost:" + servidorWebhook.getAddress().getPort() + "/webhook");
     }
 
     @AfterAll

@@ -100,13 +100,15 @@ public class IdempotenciaService {
                                         + "caiu antes de concluir; liberando para reprocessamento (clientId={}, "
                                         + "tipoOperacao={}, chave={})",
                                 TEMPO_LIMITE_PROCESSANDO, clientId, tipoOperacao, chave);
-                        repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave);
+                        transactionTemplate.executeWithoutResult(status ->
+                                repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave));
                         continue;
                     }
                     throw new RequisicaoEmProcessamentoException(chave);
                 }
                 if (existente.expirada(Instant.now())) {
-                    repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave);
+                    transactionTemplate.executeWithoutResult(status ->
+                            repository.deleteByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave));
                     continue; // janela expirou, reprocessa como se fosse nova
                 }
                 return new ResultadoPlaceholder(existente.getRespostaJson());
