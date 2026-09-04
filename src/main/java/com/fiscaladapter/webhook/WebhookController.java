@@ -22,14 +22,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class WebhookController {
 
     private final ClienteApiService clienteApiService;
+    private final WebhookUrlValidator webhookUrlValidator;
 
-    public WebhookController(ClienteApiService clienteApiService) {
+    public WebhookController(ClienteApiService clienteApiService, WebhookUrlValidator webhookUrlValidator) {
         this.clienteApiService = clienteApiService;
+        this.webhookUrlValidator = webhookUrlValidator;
     }
 
     @PutMapping("/api/v1/webhook")
     public ResponseEntity<WebhookCadastradoResponse> definir(@RequestBody @Valid WebhookUrlRequest request,
                                                               Authentication authentication) {
+        webhookUrlValidator.validar(request.url());
         String secret = clienteApiService.definirWebhookUrl(authentication.getName(), request.url());
         return ResponseEntity.ok(new WebhookCadastradoResponse(request.url(), secret));
     }
