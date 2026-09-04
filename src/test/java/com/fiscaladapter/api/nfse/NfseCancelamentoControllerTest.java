@@ -129,6 +129,52 @@ class NfseCancelamentoControllerTest {
     }
 
     @Test
+    void deveRejeitarNumeroNfseNaoNumerico() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfse/cancelamento")
+                        .param("codigoIbgeMunicipio", CODIGO_IBGE_MUNICIPIO)
+                        .param("numeroNfse", "1</Numero><Injetado>x")
+                        .param("cpfCnpjPrestador", CNPJ_PRESTADOR)
+                        .param("codigoMunicipioPrestacao", CODIGO_IBGE_MUNICIPIO)
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("numeroNfse")));
+    }
+
+    @Test
+    void deveRejeitarInscricaoMunicipalComCaracteresXmlEspeciais() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfse/cancelamento")
+                        .param("codigoIbgeMunicipio", CODIGO_IBGE_MUNICIPIO)
+                        .param("numeroNfse", "792")
+                        .param("cpfCnpjPrestador", CNPJ_PRESTADOR)
+                        .param("inscricaoMunicipalPrestador", "</InscricaoMunicipal><Injetado>x")
+                        .param("codigoMunicipioPrestacao", CODIGO_IBGE_MUNICIPIO)
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("inscricaoMunicipalPrestador")));
+    }
+
+    @Test
+    void deveRejeitarSerieRpsComCaracteresXmlEspeciais() throws Exception {
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfse/consulta")
+                        .param("codigoIbgeMunicipio", CODIGO_IBGE_MUNICIPIO)
+                        .param("numeroRps", "42")
+                        .param("serieRps", "1</Serie><Injetado>x")
+                        .param("cpfCnpjPrestador", CNPJ_PRESTADOR)
+                        .param("ambiente", "HOMOLOGACAO")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("serieRps")));
+    }
+
+    @Test
     void deveRejeitarRequisicaoSemToken() throws Exception {
         mockMvc.perform(post("/api/v1/nfse/cancelamento")
                         .param("codigoIbgeMunicipio", CODIGO_IBGE_MUNICIPIO)

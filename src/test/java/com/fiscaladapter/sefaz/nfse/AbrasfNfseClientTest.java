@@ -122,6 +122,57 @@ class AbrasfNfseClientTest {
         }
     }
 
+    /**
+     * FIS-57: numeroNfse/inscricaoMunicipalPrestador/codigoMunicipioPrestacao sao concatenados
+     * diretamente no XML (esta classe monta o envelope na mao, sem um writer que escape
+     * automaticamente) - antes da correcao, um valor como "</Numero><Malicioso>x</Malicioso>"
+     * quebrava a estrutura do XML enviado a prefeitura. Prova que os caracteres especiais chegam
+     * escapados (entidades XML), nao como marcacao literal.
+     */
+    @Test
+    void deveEscaparCaracteresEspeciaisAoCancelarNfse() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        String numeroMalicioso = "1</Numero><Injetado>x";
+        String inscricaoMaliciosa = "</InscricaoMunicipal></IdentificacaoNfse><IdentificacaoNfse><Numero>999";
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).doesNotContain("<Injetado>");
+            assertThat(req).contains("&lt;Injetado&gt;");
+            assertThat(req).doesNotContain("<IdentificacaoNfse><Numero>999");
+            // exatamente uma abertura de <Numero> real (a segunda "Numero" veio escapada, dentro do texto)
+            assertThat(req.split("<Numero>", -1).length - 1).isEqualTo(1);
+            return RESPOSTA_CANCELAMENTO_CONFIRMADO;
+        })) {
+            HttpClient httpClient = clienteHttp(certificado, servidor);
+            AbrasfNfseClient client = new AbrasfNfseClient(null, null);
+
+            CancelamentoNfseResponse resposta = client.cancelarNfseNoEndpoint(
+                    servidor.url(), numeroMalicioso, CNPJ_PRESTADOR, inscricaoMaliciosa, "3550308", httpClient);
+
+            assertThat(resposta.cancelada()).isTrue();
+        }
+    }
+
+    @Test
+    void deveEscaparCaracteresEspeciaisAoConsultarNfseRps() throws Exception {
+        CertificadoCarregado certificado = certificadoDeTeste();
+        String serieMaliciosa = "1</Serie><Injetado>x";
+
+        try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
+            assertThat(req).doesNotContain("<Injetado>");
+            assertThat(req).contains("&lt;Injetado&gt;");
+            return RESPOSTA_GERACAO_AUTORIZADA;
+        })) {
+            HttpClient httpClient = clienteHttp(certificado, servidor);
+            AbrasfNfseClient client = new AbrasfNfseClient(null, null);
+
+            NfseResponse resposta = client.consultarNfseRpsNoEndpoint(
+                    servidor.url(), 42, serieMaliciosa, CNPJ_PRESTADOR, "123456", httpClient);
+
+            assertThat(resposta.autorizada()).isTrue();
+        }
+    }
+
     private HttpClient clienteHttp(CertificadoCarregado certificado, ServidorSoapDeTeste servidor) {
         return new SefazHttpClientFactory().criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
     }

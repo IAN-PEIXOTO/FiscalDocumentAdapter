@@ -118,6 +118,12 @@ ambiente=HOMOLOGACAO
 }
 ```
 
+**Validação de entrada (FIS-57)**: `numeroNfse` e `codigoMunicipioPrestacao` devem ser
+só dígitos; `inscricaoMunicipalPrestador` e `serieRps` não podem conter `< > & " '`
+(HTTP 400 caso contrário) - esses valores são concatenados diretamente no XML SOAP
+enviado à prefeitura (o padrão ABRASF não exige assinatura do RPS, então não há outra
+camada de proteção estrutural além do escape feito nesse XML).
+
 ```
 POST /api/v1/nfse/consulta
 

@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.regex.Pattern;
+
 /**
  * Cancelamento e consulta de status de uma NFS-e ja emitida, junto ao
  * webservice municipal padrao ABRASF (FIS-56) - reaproveita
@@ -30,6 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class NfseCancelamentoController {
+
+    /** FIS-57: nenhum destes campos deve conter caracteres especiais de XML - sao concatenados
+     * diretamente no envelope SOAP por AbrasfNfseClient (agora escapados na origem tambem, em
+     * defesa de profundidade), entao aqui a validacao rejeita cedo com uma mensagem clara. */
+    private static final Pattern SOMENTE_DIGITOS = Pattern.compile("^\\d+$");
+    private static final Pattern SEM_CARACTERES_XML_ESPECIAIS = Pattern.compile("^[^<>&\"']*$");
 
     private final AbrasfNfseClient abrasfNfseClient;
     private final CertificadoEmissorService certificadoEmissorService;
@@ -53,6 +61,10 @@ public class NfseCancelamentoController {
                                                                  @RequestParam String codigoMunicipioPrestacao,
                                                                  @RequestParam TipoAmbiente ambiente,
                                                                  Authentication authentication) {
+        validarNumerico(numeroNfse, "numeroNfse");
+        validarNumerico(codigoMunicipioPrestacao, "codigoMunicipioPrestacao");
+        validarSemCaracteresXmlEspeciais(inscricaoMunicipalPrestador, "inscricaoMunicipalPrestador");
+
         CertificadoCarregado certificado = carregarCertificado(cpfCnpjPrestador, authentication);
 
         CancelamentoNfseResponse resposta = abrasfNfseClient.cancelarNfse(codigoIbgeMunicipio, numeroNfse,
@@ -71,6 +83,9 @@ public class NfseCancelamentoController {
                                                               @RequestParam(required = false) String inscricaoMunicipalPrestador,
                                                               @RequestParam TipoAmbiente ambiente,
                                                               Authentication authentication) {
+        validarSemCaracteresXmlEspeciais(serieRps, "serieRps");
+        validarSemCaracteresXmlEspeciais(inscricaoMunicipalPrestador, "inscricaoMunicipalPrestador");
+
         CertificadoCarregado certificado = carregarCertificado(cpfCnpjPrestador, authentication);
 
         NfseResponse resposta = abrasfNfseClient.consultarNfseRps(codigoIbgeMunicipio, numeroRps, serieRps,
@@ -83,5 +98,17 @@ public class NfseCancelamentoController {
     private CertificadoCarregado carregarCertificado(String cpfCnpjPrestador, Authentication authentication) {
         String documento = cpfCnpjPrestador.replaceAll("\\D", "");
         return certificadoEmissorService.carregar(authentication.getName(), documento);
+    }
+
+    private void validarNumerico(String valor, String nomeCampo) {
+        if (!SOMENTE_DIGITOS.matcher(valor).matches()) {
+            throw new IllegalArgumentException(nomeCampo + " deve conter apenas digitos: " + valor);
+        }
+    }
+
+    private void validarSemCaracteresXmlEspeciais(String valor, String nomeCampo) {
+        if (valor != null && !SEM_CARACTERES_XML_ESPECIAIS.matcher(valor).matches()) {
+            throw new IllegalArgumentException(nomeCampo + " nao pode conter os caracteres < > & \" '");
+        }
     }
 }

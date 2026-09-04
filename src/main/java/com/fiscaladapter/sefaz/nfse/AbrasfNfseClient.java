@@ -78,12 +78,12 @@ public class AbrasfNfseClient {
         String xml = "<ConsultarNfseRpsEnvio xmlns=\"http://www.abrasf.org.br/nfse.xsd\">"
                 + "<IdentificacaoRps>"
                 + "<Numero>" + numeroRps + "</Numero>"
-                + "<Serie>" + serieRps + "</Serie>"
+                + "<Serie>" + escaparXml(serieRps) + "</Serie>"
                 + "<Tipo>1</Tipo>"
                 + "</IdentificacaoRps>"
                 + "<Prestador>"
                 + "<CpfCnpj><" + tagDocumento + ">" + documento + "</" + tagDocumento + "></CpfCnpj>"
-                + (inscricaoMunicipalPrestador != null ? "<InscricaoMunicipal>" + inscricaoMunicipalPrestador + "</InscricaoMunicipal>" : "")
+                + (inscricaoMunicipalPrestador != null ? "<InscricaoMunicipal>" + escaparXml(inscricaoMunicipalPrestador) + "</InscricaoMunicipal>" : "")
                 + "</Prestador>"
                 + "</ConsultarNfseRpsEnvio>";
 
@@ -116,10 +116,10 @@ public class AbrasfNfseClient {
                 + "<Pedido>"
                 + "<InfPedidoCancelamento>"
                 + "<IdentificacaoNfse>"
-                + "<Numero>" + numeroNfse + "</Numero>"
+                + "<Numero>" + escaparXml(numeroNfse) + "</Numero>"
                 + "<CpfCnpj><" + tagDocumento + ">" + documento + "</" + tagDocumento + "></CpfCnpj>"
-                + (inscricaoMunicipalPrestador != null ? "<InscricaoMunicipal>" + inscricaoMunicipalPrestador + "</InscricaoMunicipal>" : "")
-                + "<CodigoMunicipio>" + codigoMunicipioPrestacao + "</CodigoMunicipio>"
+                + (inscricaoMunicipalPrestador != null ? "<InscricaoMunicipal>" + escaparXml(inscricaoMunicipalPrestador) + "</InscricaoMunicipal>" : "")
+                + "<CodigoMunicipio>" + escaparXml(codigoMunicipioPrestacao) + "</CodigoMunicipio>"
                 + "</IdentificacaoNfse>"
                 + "</InfPedidoCancelamento>"
                 + "</Pedido>"
@@ -163,5 +163,17 @@ public class AbrasfNfseClient {
     private String extrair(Pattern padrao, String texto) {
         Matcher matcher = padrao.matcher(texto);
         return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Escapa os caracteres especiais de XML (FIS-57) - numero do RPS/NFS-e, serie, inscricao
+     * municipal e codigo do municipio sao concatenados diretamente na string do envelope (esta
+     * classe monta o XML na mao, sem um writer que escape automaticamente como o
+     * XMLStreamWriter usado no XML fiscal principal); sem isso, um valor como
+     * "</Numero><Malicioso>" quebraria/adulteraria a estrutura do XML enviado a prefeitura.
+     */
+    private static String escaparXml(String texto) {
+        return texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&apos;");
     }
 }
