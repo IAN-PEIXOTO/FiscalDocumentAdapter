@@ -81,11 +81,6 @@ public class EmissaoAssincrona {
         this.atualizadoEm = agora;
     }
 
-    public void marcarProcessando(Instant agora) {
-        this.status = StatusEmissaoAssincrona.PROCESSANDO;
-        this.atualizadoEm = agora;
-    }
-
     public void concluir(String resultadoJsonCriptografado, Instant agora) {
         this.status = StatusEmissaoAssincrona.CONCLUIDA;
         this.resultadoJson = resultadoJsonCriptografado;

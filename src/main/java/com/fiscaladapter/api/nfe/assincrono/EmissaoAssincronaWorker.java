@@ -69,13 +69,16 @@ public class EmissaoAssincronaWorker {
         List<EmissaoAssincrona> elegiveis = repository.buscarElegiveis(
                 StatusEmissaoAssincrona.PENDENTE, Instant.now(), PageRequest.of(0, 5));
         for (EmissaoAssincrona job : elegiveis) {
-            processar(job.getId());
+            // Reivindicacao atomica (FIS-74): com mais de uma instancia da aplicacao rodando, duas
+            // podem enxergar o mesmo job como elegivel no mesmo ciclo de poll - so quem vencer a
+            // corrida (UPDATE condicional que realmente mudou a linha) processa; a outra ignora.
+            if (marcarProcessando(job.getId())) {
+                processar(job.getId());
+            }
         }
     }
 
     private void processar(Long jobId) {
-        marcarProcessando(jobId);
-
         NfeResponse resultado = null;
         String erroTerminal = null;
         try {
@@ -124,9 +127,11 @@ public class EmissaoAssincronaWorker {
         }
     }
 
-    private void marcarProcessando(Long jobId) {
-        transactionTemplate.executeWithoutResult(status ->
-                repository.findById(jobId).ifPresent(job -> job.marcarProcessando(Instant.now())));
+    /** @return true se esta chamada reivindicou o job (era PENDENTE no momento exato do UPDATE). */
+    private boolean marcarProcessando(Long jobId) {
+        Integer linhasAtualizadas = transactionTemplate.execute(status ->
+                repository.reivindicarSePendente(jobId, Instant.now()));
+        return linhasAtualizadas != null && linhasAtualizadas == 1;
     }
 
     private void concluir(Long jobId, NfeResponse resultado) {
