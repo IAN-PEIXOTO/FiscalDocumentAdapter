@@ -4,6 +4,21 @@
 
 Adapter fiscal gratuito: recebe JSON (no mesmo formato da API ACBr) e emite documentos fiscais eletronicos diretamente na SEFAZ, sem depender do ACBr.
 
+## Documentacao de integracao
+
+Este README documenta as decisoes tecnicas de cada card do backlog, em ordem
+cronologica. Para **integrar com a API** (o que enviar, o que esperar de volta, regras
+de negocio, eventos, codigos de rejeicao), use os manuais em [`docs/`](docs/00-visao-geral.md),
+organizados por documento fiscal no espirito do Manual de Orientacao do Contribuinte
+(MOC) da SEFAZ:
+
+- [docs/00-visao-geral.md](docs/00-visao-geral.md) - autenticacao, certificado digital, idempotencia, ambientes, erros
+- [docs/manual-nfe.md](docs/manual-nfe.md) - NF-e (modelo 55)
+- [docs/manual-nfce.md](docs/manual-nfce.md) - NFC-e (modelo 65)
+- [docs/manual-cte.md](docs/manual-cte.md) - CT-e (modelo 57)
+- [docs/manual-mdfe.md](docs/manual-mdfe.md) - MDF-e (modelo 58)
+- [docs/manual-nfse.md](docs/manual-nfse.md) - NFS-e (padrao ABRASF)
+
 ## Rodando localmente
 
 ```bash
