@@ -44,6 +44,21 @@ public class BootstrapClienteDevConfig {
         };
     }
 
+    /**
+     * FIS-66: application.yml define spring.profiles.active=dev como default e um fallback
+     * hardcoded para a chave de criptografia quando SPRING_PROFILES_ACTIVE nao esta definido -
+     * conveniente para rodar localmente sem configuracao, mas perigoso se algum dia um deploy
+     * real subir sem definir a variavel explicitamente (cairia silenciosamente no H2 em memoria
+     * e numa chave AES previsivel). Este aviso torna esse cenario visivel em qualquer agregador
+     * de log, mesmo que ninguem tenha notado a falta da variavel de ambiente.
+     */
+    @Bean
+    public CommandLineRunner avisarSobreProfileDev() {
+        return args -> log.warn("Rodando com o profile 'dev' ATIVO - H2 em memoria e chave de criptografia "
+                + "hardcoded (application.yml), inseguros fora de desenvolvimento local. Se isto nao e uma maquina "
+                + "de desenvolvedor, defina SPRING_PROFILES_ACTIVE=homolog ou =prod explicitamente.");
+    }
+
     private Path gravarCredenciaisEmArquivoLocal(ClienteApiService.CredenciaisGeradas credenciais) throws IOException {
         Path arquivo = Files.createTempFile("fiscaladapter-dev-credenciais-", ".txt");
         try {

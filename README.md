@@ -899,6 +899,17 @@ Tres profiles Spring (`application-dev.yml`, `application-homolog.yml`,
   memoria (perderia todos os dados a cada reinicio) ou na chave de dev
   hardcoded (falha grave de seguranca).
 
+> **FIS-66 - risco residual do default `dev`**: como `spring.profiles.active`
+> tem `dev` como valor padrao em `application.yml`, um deploy que esqueça de
+> definir `SPRING_PROFILES_ACTIVE=homolog`/`=prod` explicitamente cai
+> **silenciosamente** no profile dev em vez de falhar. **Todo script/manifesto
+> de deploy (systemd unit, Dockerfile, Helm chart, etc.) DEVE sempre definir
+> `SPRING_PROFILES_ACTIVE` explicitamente** - nunca depender do default. Como
+> rede de seguranca, `BootstrapClienteDevConfig` (`@Profile("dev")`) agora
+> emite um `WARN` bem visivel toda vez que a aplicacao sobe com o profile dev
+> ativo, para que o problema apareca em qualquer agregador de log mesmo que a
+> variavel de ambiente tenha sido esquecida por engano.
+
 Essa mudanca corrigiu uma lacuna real que ja existia antes do FIS-26: os
 profiles homolog/prod so mudavam `fiscaladapter.ambiente`/`tipo-ambiente`,
 nunca o datasource - ou seja, um deploy em "producao" continuaria rodando
