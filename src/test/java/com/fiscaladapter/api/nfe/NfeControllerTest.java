@@ -193,12 +193,15 @@ class NfeControllerTest {
 
         String accessToken = obterAccessToken();
 
+        // FIS-70: a mensagem interna (que pode conter XML bruto da SEFAZ) nao deve vazar na
+        // resposta HTTP - so vai para o log.
         mockMvc.perform(post("/api/v1/nfe")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(pedidoValido(102L)))
                         .header("Authorization", "Bearer " + accessToken)
                         .header("Idempotency-Key", "chave-falha-comunicacao"))
-                .andExpect(status().isBadGateway());
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("timeout na contingencia"))));
     }
 
     @Test

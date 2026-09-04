@@ -141,11 +141,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ErroResposta(e.getMessage()));
     }
 
+    /**
+     * FIS-70: a mensagem desta excecao muitas vezes inclui o XML/corpo de resposta bruto da
+     * SEFAZ/prefeitura (ex.: "Resposta de autorizacao sem cStat: <xml completo>") - util para
+     * depuracao, mas nao deve ir para o consumidor final da API (pode vazar detalhes de erro/
+     * estrutura interna do webservice de terceiro). A mensagem completa continua indo pro log.
+     */
     @ExceptionHandler(SefazComunicacaoException.class)
     public ResponseEntity<ErroResposta> tratar(SefazComunicacaoException e) {
         log.error("Falha de comunicacao com a SEFAZ (endpoint normal e contingencia esgotados): {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(new ErroResposta("Falha de comunicacao com a SEFAZ: " + e.getMessage()));
+                .body(new ErroResposta("Falha de comunicacao com a SEFAZ - tente novamente mais tarde."));
     }
 
     @ExceptionHandler(Exception.class)
