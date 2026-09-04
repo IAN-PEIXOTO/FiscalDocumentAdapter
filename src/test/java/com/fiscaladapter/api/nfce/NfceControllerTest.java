@@ -19,6 +19,7 @@ import com.fiscaladapter.api.nfe.PisRequest;
 import com.fiscaladapter.api.nfe.ProdRequest;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
+import com.fiscaladapter.retencao.RetencaoDocumentoFiscalService;
 import com.fiscaladapter.sefaz.nfe.AutorizacaoResponse;
 import com.fiscaladapter.sefaz.nfe.NfeAutorizacaoClient;
 import com.fiscaladapter.seguranca.ClienteApiService;
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -41,6 +43,7 @@ import java.util.Date;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -73,6 +76,9 @@ class NfceControllerTest {
 
     @MockBean
     private NfeAutorizacaoClient autorizacaoClient;
+
+    @SpyBean
+    private RetencaoDocumentoFiscalService retencaoDocumentoFiscalService;
 
     private String clientId;
     private String clientSecret;
@@ -113,6 +119,37 @@ class NfceControllerTest {
                 .andExpect(jsonPath("$.urlConsultaPublica").value("https://www.homologacao.nfce.fazenda.sp.gov.br/qrcode"))
                 .andExpect(jsonPath("$.danfePdfBase64").isNotEmpty())
                 .andExpect(jsonPath("$.xmlAssinado", org.hamcrest.Matchers.containsString("infNFeSupl")));
+    }
+
+    /**
+     * FIS-100: mesmo comportamento de NfeControllerTest.deveReservarNumeroEArquivarDocumentoQuandoUsoEDenegado -
+     * cStat 110 (uso denegado) consome definitivamente o numero na SEFAZ, entao precisa reservar e
+     * arquivar mesmo sem autorizacao.
+     */
+    @Test
+    void deveReservarNumeroEArquivarDocumentoQuandoUsoEDenegado() throws Exception {
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenReturn(new AutorizacaoResponse("301", "Uso Denegado: Irregularidade fiscal do emitente", null, null, false));
+
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(600L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-nfce-denegado"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.autorizada").value(false))
+                .andExpect(jsonPath("$.codigoStatusSefaz").value("301"));
+
+        verify(retencaoDocumentoFiscalService).arquivar(any(), any(), any(), any(), any(), any());
+
+        mockMvc.perform(post("/api/v1/nfce")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(600L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-nfce-denegado-reenvio"))
+                .andExpect(status().isConflict());
     }
 
     @Test

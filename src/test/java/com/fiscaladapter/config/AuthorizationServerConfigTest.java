@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * FIS-97: a chave RSA do Authorization Server precisa ser a mesma entre instancias da aplicacao -
@@ -48,6 +49,25 @@ class AuthorizationServerConfigTest {
 
         assertThat(chaveInstanciaA.getKeys().get(0).toJSONString())
                 .isNotEqualTo(chaveInstanciaB.getKeys().get(0).toJSONString());
+    }
+
+    @Test
+    void deveFalharNaInicializacaoQuandoAChaveConfiguradaForSoPublica() throws Exception {
+        // FIS-102: RSAKey.parse aceita um JWK so-publico sem reclamar - sem a validacao explicita,
+        // a aplicacao subiria normalmente e so falharia depois, na primeira assinatura de token
+        // real, em vez de um erro claro na inicializacao (o objetivo fail-fast desta config).
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair keyPair = generator.generateKeyPair();
+        RSAKey chaveSoPublica = new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
+                .keyID(UUID.randomUUID().toString())
+                .build();
+        String chaveRsaJwkBase64 = Base64.getEncoder().encodeToString(
+                chaveSoPublica.toJSONString().getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> config.jwkSource(chaveRsaJwkBase64))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("chave privada");
     }
 
     @SuppressWarnings("unchecked")

@@ -31,16 +31,33 @@ public class NfeConsultaProtocoloClient {
 
     public ConsultaProtocoloResponse consultar(String chaveAcesso, String uf, TipoAmbiente ambiente,
                                                 CertificadoCarregado certificado) {
-        return consultar(chaveAcesso, uf, ambiente, httpClientFactory.criar(certificado));
+        return consultar(chaveAcesso, uf, uf, ambiente, httpClientFactory.criar(certificado));
+    }
+
+    /**
+     * FIS-101: em contingencia, a consulta precisa ir para o mesmo endpoint usado na autorizacao
+     * (chaveEndpoint = "SVC-AN"/"SVC-RS"), nao para o webservice da UF do emitente - que
+     * provavelmente ainda esta fora do ar, motivo de ter acionado a contingencia em primeiro
+     * lugar. cUF do envelope continua sendo o da UF do emitente. Mesma separacao uf/chaveEndpoint
+     * de {@link NfeAutorizacaoClient#autorizar(String, String, String, TipoAmbiente, CertificadoCarregado)}.
+     */
+    public ConsultaProtocoloResponse consultar(String chaveAcesso, String ufEmitente, String chaveEndpoint,
+                                                TipoAmbiente ambiente, CertificadoCarregado certificado) {
+        return consultar(chaveAcesso, ufEmitente, chaveEndpoint, ambiente, httpClientFactory.criar(certificado));
     }
 
     ConsultaProtocoloResponse consultar(String chaveAcesso, String uf, TipoAmbiente ambiente, HttpClient httpClient) {
-        String url = endpointRegistry.obterUrl(uf, ambiente, TipoServicoSefaz.CONSULTA_PROTOCOLO);
-        return consultar(url, chaveAcesso, uf, ambiente, httpClient);
+        return consultar(chaveAcesso, uf, uf, ambiente, httpClient);
+    }
+
+    ConsultaProtocoloResponse consultar(String chaveAcesso, String ufEmitente, String chaveEndpoint,
+                                         TipoAmbiente ambiente, HttpClient httpClient) {
+        String url = endpointRegistry.obterUrl(chaveEndpoint, ambiente, TipoServicoSefaz.CONSULTA_PROTOCOLO);
+        return consultarNoEndpoint(url, chaveAcesso, ufEmitente, ambiente, httpClient);
     }
 
     /** Visivel para testes: permite apontar para um servidor de teste local em vez do endpoint real da SEFAZ. */
-    ConsultaProtocoloResponse consultar(String url, String chaveAcesso, String uf, TipoAmbiente ambiente, HttpClient httpClient) {
+    ConsultaProtocoloResponse consultarNoEndpoint(String url, String chaveAcesso, String uf, TipoAmbiente ambiente, HttpClient httpClient) {
         String cUF = CodigoUfSefaz.codigo(uf);
 
         String consSitNFe = "<consSitNFe versao=\"4.00\" xmlns=\"http://www.portalfiscal.inf.br/nfe\">"

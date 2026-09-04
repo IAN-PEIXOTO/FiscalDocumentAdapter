@@ -39,7 +39,7 @@ class NfeConsultaProtocoloClientTest {
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
             NfeConsultaProtocoloClient client = new NfeConsultaProtocoloClient(null, null);
-            ConsultaProtocoloResponse resposta = client.consultar(servidor.url(),
+            ConsultaProtocoloResponse resposta = client.consultarNoEndpoint(servidor.url(),
                     "35260012345678000199550010000000421000000010", "SP", TipoAmbiente.HOMOLOGACAO, httpClient);
 
             assertThat(resposta.autorizada()).isTrue();

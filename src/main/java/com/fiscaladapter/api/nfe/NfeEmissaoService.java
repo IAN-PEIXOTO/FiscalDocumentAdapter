@@ -68,7 +68,12 @@ public class NfeEmissaoService {
 
         // so reserva o numero quando o documento efetivamente "valeu" perante o fisco (FIS-23) -
         // uma submissao rejeitada nao consome o numero, o ERP pode corrigir e reenviar o mesmo.
-        if (resultado.autorizacao().autorizada() || resultado.viaEpec()) {
+        // FIS-100: uso denegado (110/301/302) tambem precisa reservar e arquivar - ao contrario de
+        // uma rejeicao comum, a SEFAZ ja consome definitivamente aquele numero em caso de
+        // denegacao; sem reservar, o mesmo numero seria reaproveitado num reenvio e negado nas
+        // proximas tentativas para sempre, alem do protocolo de denegacao nunca ficar arquivado
+        // para auditoria.
+        if (resultado.autorizacao().autorizada() || resultado.viaEpec() || resultado.autorizacao().denegada()) {
             // Arquiva ANTES de reservar o numero (FIS-83): arquivar() e idempotente por chave de
             // acesso (DataIntegrityViolationException ignorada em duplicata), enquanto reservar()
             // lanca NumeracaoIndisponivelException se o numero ja foi usado. Se o processo cair

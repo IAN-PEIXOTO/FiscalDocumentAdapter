@@ -13,7 +13,20 @@ public record AutorizacaoResponse(String codigoStatus, String motivo, String num
      */
     private static final Set<String> CSTAT_SUCESSO = Set.of("100", "150");
 
+    /**
+     * cStat 110/301/302 = "Uso Denegado" (irregularidade fiscal cadastral do emitente ou
+     * destinatario) - FIS-100. Diferente de uma rejeicao comum (215/225/... - o cliente corrige o
+     * payload e reenvia com o MESMO numero), a SEFAZ ja consome definitivamente aquela chave/numero
+     * em caso de denegacao: reemitir com o mesmo numero de serie sera sempre negado de novo. Por
+     * isso precisa da propria categoria, distinta de autorizada() e de rejeicao-reenviavel.
+     */
+    private static final Set<String> CSTAT_DENEGADO = Set.of("110", "301", "302");
+
     public static AutorizacaoResponse de(String codigoStatus, String motivo, String numeroProtocolo, String dhRecbto) {
         return new AutorizacaoResponse(codigoStatus, motivo, numeroProtocolo, dhRecbto, CSTAT_SUCESSO.contains(codigoStatus));
+    }
+
+    public boolean denegada() {
+        return CSTAT_DENEGADO.contains(codigoStatus);
     }
 }

@@ -79,7 +79,7 @@ public class EmissaoNfeOrquestrador {
                     AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
                             normal.xmlAssinado(), uf, nfe.identificacao().ambiente(), certificado);
                     autorizacao = recuperarProtocoloSeDuplicidade(
-                            autorizacao, normal.chaveAcesso(), uf, nfe.identificacao().ambiente(), certificado);
+                            autorizacao, normal.chaveAcesso(), uf, uf, nfe.identificacao().ambiente(), certificado);
                     return finalizarComSucesso(normal, autorizacao, false, cronometro);
                 } catch (SefazComunicacaoException e) {
                     ultimaFalha = e;
@@ -106,7 +106,7 @@ public class EmissaoNfeOrquestrador {
             AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(
                     contingencia.xmlAssinado(), uf, svc.chaveEndpoint(), nfe.identificacao().ambiente(), certificado);
             autorizacao = recuperarProtocoloSeDuplicidade(
-                    autorizacao, contingencia.chaveAcesso(), uf, nfe.identificacao().ambiente(), certificado);
+                    autorizacao, contingencia.chaveAcesso(), uf, svc.chaveEndpoint(), nfe.identificacao().ambiente(), certificado);
             return finalizarComSucesso(contingencia, autorizacao, true, cronometro);
         } catch (SefazComunicacaoException falhaContingencia) {
             log.warn("Contingencia {} tambem falhou - acionando EPEC como ultimo recurso. Erro: {}",
@@ -157,9 +157,15 @@ public class EmissaoNfeOrquestrador {
      * numa tentativa anterior que na verdade foi autorizada). Nesse caso consulta a situacao real
      * da chave e, se autorizada, devolve sucesso com o protocolo verdadeiro em vez de reportar uma
      * rejeicao para um documento que ja e valido perante o fisco.
+     *
+     * FIS-101: chaveEndpoint precisa ser o MESMO usado na chamada de autorizar (uf no caminho
+     * normal, svc.chaveEndpoint() em contingencia) - consultar sempre no endpoint da UF, mesmo
+     * quando a autorizacao foi enviada ao SVC, mandava a consulta de recuperacao para um endpoint
+     * provavelmente ainda fora do ar (motivo de ter acionado a contingencia), fazendo a
+     * recuperacao falhar silenciosamente e manter a rejeicao (204) falsa.
      */
     private AutorizacaoResponse recuperarProtocoloSeDuplicidade(AutorizacaoResponse autorizacao, String chaveAcesso,
-                                                                  String uf, TipoAmbiente ambiente,
+                                                                  String uf, String chaveEndpoint, TipoAmbiente ambiente,
                                                                   CertificadoCarregado certificado) {
         if (!CSTAT_DUPLICIDADE.equals(autorizacao.codigoStatus())) {
             return autorizacao;
@@ -167,7 +173,7 @@ public class EmissaoNfeOrquestrador {
 
         log.warn("SEFAZ respondeu cStat 204 (duplicidade) para a chave {} - consultando o protocolo real antes de reportar rejeicao", chaveAcesso);
         try {
-            ConsultaProtocoloResponse situacao = consultaProtocoloClient.consultar(chaveAcesso, uf, ambiente, certificado);
+            ConsultaProtocoloResponse situacao = consultaProtocoloClient.consultar(chaveAcesso, uf, chaveEndpoint, ambiente, certificado);
             if (situacao.autorizada()) {
                 log.info("Duplicidade confirmada como NFe ja autorizada (protocolo {}) - recuperando sucesso", situacao.numeroProtocolo());
                 return new AutorizacaoResponse(situacao.codigoStatus(), situacao.motivo(),

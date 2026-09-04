@@ -78,6 +78,22 @@ class RateLimitFilterTest {
         assertThat(chamarFiltroComBasicAuth(basicAuth)).isFalse();
     }
 
+    @Test
+    void deveAplicarLimiteMesmoComPercentEncodingInvalidoNoClientIdDoBasicAuth() throws Exception {
+        // FIS-103: um "%" solto no client_id quebra URLDecoder.decode (IllegalArgumentException) -
+        // antes da correcao isso fazia extrairClientIdDoBasicAuth devolver null, e a requisicao
+        // caia no fallback de parametro (ausente aqui) e escapava do rate limit por completo.
+        String clientIdMalformado = "cliente%-malformado";
+        String basicAuth = "Basic " + Base64.getEncoder().encodeToString(
+                (clientIdMalformado + ":qualquer-secret").getBytes(StandardCharsets.UTF_8));
+
+        for (int i = 0; i < 60; i++) {
+            assertThat(chamarFiltroComBasicAuth(basicAuth)).isTrue();
+        }
+
+        assertThat(chamarFiltroComBasicAuth(basicAuth)).isFalse();
+    }
+
     /** @return true se a requisicao passou (chain.doFilter chamado), false se foi bloqueada com 429. */
     private boolean chamarFiltro(String clientIdParam) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();

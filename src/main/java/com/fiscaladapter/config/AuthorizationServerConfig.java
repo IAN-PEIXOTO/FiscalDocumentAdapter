@@ -86,7 +86,18 @@ public class AuthorizationServerConfig {
 
     private RSAKey carregarChaveDeConfiguracao(String chaveRsaJwkBase64) throws Exception {
         String json = new String(Base64.getDecoder().decode(chaveRsaJwkBase64), StandardCharsets.UTF_8);
-        return RSAKey.parse(json);
+        RSAKey rsaKey = RSAKey.parse(json);
+        // FIS-102: RSAKey.parse aceita um JWK so-publico (sem o campo "d") sem reclamar - se
+        // alguem colar por engano so a metade publica (ex.: exportou do par errado), a aplicacao
+        // subiria normalmente e so falharia na primeira assinatura de token real (500 tardio em
+        // vez de erro claro na inicializacao, o que contradiz o objetivo fail-fast desta config).
+        if (!rsaKey.isPrivate()) {
+            throw new IllegalStateException(
+                    "fiscaladapter.seguranca.chave-rsa-jwk decodifica para um JWK RSA sem chave privada "
+                            + "(campo \"d\" ausente) - necessaria para assinar os tokens emitidos, nao apenas "
+                            + "para valida-los. Confira se nao foi colada so a metade publica do par.");
+        }
+        return rsaKey;
     }
 
     @Bean

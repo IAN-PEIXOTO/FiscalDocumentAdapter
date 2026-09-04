@@ -131,7 +131,7 @@ class EmissaoNfeOrquestradorTest {
 
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
-        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000009", "2026-03-15T10:00:00-03:00"));
 
         ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
@@ -142,13 +142,40 @@ class EmissaoNfeOrquestradorTest {
     }
 
     @Test
+    void deveConsultarOEndpointDoSvcAoRecuperarDuplicidadeDuranteContingencia() throws Exception {
+        // FIS-101: em contingencia, a autorizacao vai para o SVC, mas a consulta de recuperacao de
+        // duplicidade (204) mandava sempre para o endpoint da UF - que provavelmente ainda esta
+        // fora do ar (motivo de ter acionado a contingencia). A consulta precisa ir para o MESMO
+        // endpoint usado na autorizacao (SVC-AN, aqui).
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        CertificadoCarregado certificado = certificadoDeTeste();
+
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenThrow(new SefazComunicacaoException("timeout endpoint normal"));
+        when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+                .thenReturn(ConsultaProtocoloResponse.de("100", "Autorizado o uso da NF-e", "135260000000010", "2026-03-15T10:00:00-03:00"));
+
+        ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);
+
+        assertThat(resultado.autorizacao().autorizada()).isTrue();
+        assertThat(resultado.autorizacao().numeroProtocolo()).isEqualTo("135260000000010");
+        assertThat(resultado.viaContingencia()).isTrue();
+        verify(consultaProtocoloClient, times(1))
+                .consultar(anyString(), eq("SP"), eq("SVC-AN"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class));
+        verify(consultaProtocoloClient, org.mockito.Mockito.never())
+                .consultar(anyString(), eq("SP"), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class));
+    }
+
+    @Test
     void deveManterRejeicaoQuandoDuplicidadeNaoEConfirmadaComoAutorizada() throws Exception {
         NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
         CertificadoCarregado certificado = certificadoDeTeste();
 
         when(autorizacaoClient.autorizar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenReturn(AutorizacaoResponse.de("204", "Duplicidade de NF-e", null, null));
-        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
+        when(consultaProtocoloClient.consultar(anyString(), eq("SP"), eq("SP"), eq(TipoAmbiente.HOMOLOGACAO), any(CertificadoCarregado.class)))
                 .thenReturn(ConsultaProtocoloResponse.de("110", "Uso Denegado", null, null));
 
         ResultadoEmissaoNfe resultado = orquestrador.emitir(nfe, certificado);

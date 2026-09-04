@@ -77,13 +77,23 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (header == null || !header.regionMatches(true, 0, "Basic ", 0, 6)) {
             return null;
         }
+        String credenciais;
         try {
-            String credenciais = new String(Base64.getDecoder().decode(header.substring(6).trim()), StandardCharsets.UTF_8);
-            int separador = credenciais.indexOf(':');
-            String clientId = separador < 0 ? credenciais : credenciais.substring(0, separador);
+            credenciais = new String(Base64.getDecoder().decode(header.substring(6).trim()), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return null; // base64 realmente invalido - nao ha client_id nenhum para extrair daqui
+        }
+
+        int separador = credenciais.indexOf(':');
+        String clientId = separador < 0 ? credenciais : credenciais.substring(0, separador);
+        try {
             return URLDecoder.decode(clientId, StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
-            return null; // header Basic malformado - deixa o fallback de parametro/limite generico decidir
+            // FIS-103: um percent-encoding invalido (ex.: "%" solto) so quebra o URL-decode, nao
+            // significa que nao ha client_id - usar o valor bruto (nao decodificado) como chave de
+            // rate limit em vez de cair pro fallback de parametro (normalmente ausente aqui) e
+            // devolver null, o que deixaria essa requisicao passar sem limite algum.
+            return clientId;
         }
     }
 

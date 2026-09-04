@@ -160,6 +160,40 @@ class NfeControllerTest {
     }
 
     /**
+     * FIS-100: cStat 110 (uso denegado por irregularidade cadastral) nao e uma rejeicao comum - a
+     * SEFAZ ja consome definitivamente aquele numero, entao o adapter precisa reservar e arquivar
+     * mesmo sem autorizacao, para impedir que o mesmo numero seja reaproveitado num reenvio (que
+     * seria negado de novo sempre) e manter o protocolo da denegacao auditavel.
+     */
+    @Test
+    void deveReservarNumeroEArquivarDocumentoQuandoUsoEDenegado() throws Exception {
+        when(autorizacaoClient.autorizar(any(), any(), any(), any()))
+                .thenReturn(new AutorizacaoResponse("110", "Uso Denegado: Irregularidade fiscal do emitente", null, null, false));
+
+        String accessToken = obterAccessToken();
+
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(600L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-denegado"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.autorizada").value(false))
+                .andExpect(jsonPath("$.codigoStatusSefaz").value("110"));
+
+        verify(retencaoDocumentoFiscalService).arquivar(any(), any(), any(), any(), any(), any());
+
+        // o numero 600 foi consumido pela denegacao - uma nova tentativa com o MESMO numero deve
+        // ser rejeitada por conflito de numeracao, provando que a reserva de fato aconteceu.
+        mockMvc.perform(post("/api/v1/nfe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pedidoValido(600L)))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "chave-denegado-reenvio"))
+                .andExpect(status().isConflict());
+    }
+
+    /**
      * FIS-83: se o numero ja estiver reservado (ex.: tentativa anterior que caiu entre reservar e
      * arquivar), a nova tentativa autorizada pela SEFAZ ainda deve ser arquivada (XML/protocolo
      * preservados) antes do erro de numeracao ser propagado - nao pode ficar "perdida" so porque

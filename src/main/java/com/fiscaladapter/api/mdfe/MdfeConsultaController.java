@@ -34,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Base64;
 
 /**
@@ -165,7 +164,11 @@ public class MdfeConsultaController {
                 .orElseThrow(() -> new IllegalStateException("MDF-e " + chaveAcesso + " nao encontrado no arquivamento legal"));
 
         Mdfe mdfe = MdfeXmlParser.paraDominio(documento.xmlAssinado());
-        OffsetDateTime dataHoraAutorizacao = documento.dataEmissao().atStartOfDay(ZoneId.systemDefault()).toOffsetDateTime();
+        // FIS-104: mesma correcao do FIS-92 (que ficou so na linha 140 deste arquivo) - fuso fixo
+        // do Brasil, nao o do JVM/SO, senao a "data/hora de autorizacao" reimpressa pode mostrar
+        // hora deslocada (e, perto da meia-noite, ate dia calendario errado) em deploys fora de
+        // Brasilia.
+        OffsetDateTime dataHoraAutorizacao = documento.dataEmissao().atStartOfDay(FusoHorarioFiscal.BRASIL).toOffsetDateTime();
 
         DadosImpressaoDamdfe dados = DadosImpressaoDamdfe.deEncerramento(
                 documento.numeroProtocolo(), dataHoraAutorizacao, codigoMunicipioEncerramento, dataEncerramento);

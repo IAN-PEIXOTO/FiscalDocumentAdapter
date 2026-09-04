@@ -111,7 +111,9 @@ public class NfceEmissaoService {
 
         AutorizacaoResponse autorizacao = autorizacaoClient.autorizar(xmlComQrCode, uf, nfce.identificacao().ambiente(), certificado);
 
-        if (autorizacao.autorizada()) {
+        // FIS-100: uso denegado (110/301/302) tambem precisa reservar e arquivar - ver
+        // justificativa em NfeEmissaoService.processar.
+        if (autorizacao.autorizada() || autorizacao.denegada()) {
             // Arquiva antes de reservar (FIS-83) - ver justificativa em NfeEmissaoService.processar.
             retencaoDocumentoFiscalService.arquivar(chaveAcesso, nfce.emitente().cnpjSemMascara(),
                     TipoDocumentoFiscal.NFCE, autorizacao.numeroProtocolo(), xmlComQrCode, nfce.identificacao().dataEmissao());
