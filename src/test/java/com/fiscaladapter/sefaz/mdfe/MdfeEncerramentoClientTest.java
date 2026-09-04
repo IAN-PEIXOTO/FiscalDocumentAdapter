@@ -5,6 +5,7 @@ import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoDigitalService;
 import com.fiscaladapter.certificado.TestCertificadoFactory;
 import com.fiscaladapter.documento.mdfe.MdfeEncerramentoXmlGenerator;
+import com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.sefaz.SefazHttpClientFactory;
 import com.fiscaladapter.sefaz.ServidorSoapDeTeste;
@@ -44,7 +45,7 @@ class MdfeEncerramentoClientTest {
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
             MdfeEncerramentoClient client = new MdfeEncerramentoClient(null, null,
-                    new AssinaturaXmlService(), new MdfeEncerramentoXmlGenerator());
+                    new AssinaturaXmlService(), new MdfeEncerramentoXmlGenerator(), new MdfeEventoXsdValidator());
 
             var resposta = client.encerrar(servidor.url(), CHAVE_ACESSO, "935260000000001", "SP", "3550308",
                     LocalDate.of(2026, 3, 20), TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
@@ -69,7 +70,7 @@ class MdfeEncerramentoClientTest {
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
             MdfeEncerramentoClient client = new MdfeEncerramentoClient(null, null,
-                    new AssinaturaXmlService(), new MdfeEncerramentoXmlGenerator());
+                    new AssinaturaXmlService(), new MdfeEncerramentoXmlGenerator(), new MdfeEventoXsdValidator());
 
             var resposta = client.encerrar(servidor.url(), CHAVE_ACESSO, protocoloMalicioso, "SP", municipioMalicioso,
                     LocalDate.of(2026, 3, 20), TipoAmbiente.HOMOLOGACAO, certificado, httpClient);

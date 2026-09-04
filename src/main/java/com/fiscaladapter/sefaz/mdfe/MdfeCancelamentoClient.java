@@ -3,6 +3,8 @@ package com.fiscaladapter.sefaz.mdfe;
 import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.documento.CodigoUfSefaz;
+import com.fiscaladapter.documento.FusoHorarioFiscal;
+import com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.sefaz.SefazHttpClientFactory;
@@ -40,12 +42,14 @@ public class MdfeCancelamentoClient {
     private final MdfeEndpointRegistry endpointRegistry;
     private final SefazHttpClientFactory httpClientFactory;
     private final AssinaturaXmlService assinaturaXmlService;
+    private final MdfeEventoXsdValidator xsdValidator;
 
     public MdfeCancelamentoClient(MdfeEndpointRegistry endpointRegistry, SefazHttpClientFactory httpClientFactory,
-                                   AssinaturaXmlService assinaturaXmlService) {
+                                   AssinaturaXmlService assinaturaXmlService, MdfeEventoXsdValidator xsdValidator) {
         this.endpointRegistry = endpointRegistry;
         this.httpClientFactory = httpClientFactory;
         this.assinaturaXmlService = assinaturaXmlService;
+        this.xsdValidator = xsdValidator;
     }
 
     public CancelamentoResponse cancelar(String chaveAcesso, String numeroProtocolo, String justificativa,
@@ -72,7 +76,7 @@ public class MdfeCancelamentoClient {
                 + "<tpAmb>" + ambiente.codigo() + "</tpAmb>"
                 + "<CNPJ>" + extrairCnpjDoCertificado(certificado) + "</CNPJ>"
                 + "<chMDFe>" + chaveAcesso + "</chMDFe>"
-                + "<dhEvento>" + OffsetDateTime.now().format(DATA_EVENTO_FORMAT) + "</dhEvento>"
+                + "<dhEvento>" + OffsetDateTime.now(FusoHorarioFiscal.BRASIL).format(DATA_EVENTO_FORMAT) + "</dhEvento>"
                 + "<tpEvento>" + TP_EVENTO_CANCELAMENTO + "</tpEvento>"
                 + "<nSeqEvento>" + nSeqEvento + "</nSeqEvento>"
                 + "<detEvento versaoEvento=\"" + VERSAO_EVENTO + "\">"
@@ -86,6 +90,10 @@ public class MdfeCancelamentoClient {
                 + "</eventoMDFe>";
 
         String eventoAssinado = assinaturaXmlService.assinar(eventoSemAssinatura, id, certificado);
+        // FIS-98: valida o envelope local antes de enviar, mesmo padrao dos pipelines principais
+        // de documento - nao ha XSD proprio do conteudo de evCancMDFe carregado neste validador
+        // (so envelope e evEncMDFe), mas o envelope ja cobre estrutura/campos comuns do evento.
+        xsdValidator.validarEnvelope(eventoAssinado);
         String eventoSemDeclaracao = eventoAssinado.replaceFirst("<\\?xml[^>]*\\?>", "");
 
         String respostaXml = MdfeSoapClient.enviarTextoPuro(httpClient, url, NAMESPACE, cUF, VERSAO_EVENTO, eventoSemDeclaracao);

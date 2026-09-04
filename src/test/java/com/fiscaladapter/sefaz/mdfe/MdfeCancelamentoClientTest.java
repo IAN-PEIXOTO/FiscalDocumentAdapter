@@ -43,7 +43,7 @@ class MdfeCancelamentoClientTest {
             HttpClient httpClient = new SefazHttpClientFactory()
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
-            MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService());
+            MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService(), new com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator());
             CancelamentoResponse resposta = client.cancelar(servidor.url(), CHAVE_ACESSO, "935260000000001",
                     "Erro no cadastro do veiculo de transporte", "SP", TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
 
@@ -65,7 +65,7 @@ class MdfeCancelamentoClientTest {
             HttpClient httpClient = new SefazHttpClientFactory()
                     .criarComTrustManager(certificado, servidor.trustManagerQueAceitaEsteServidor());
 
-            MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService());
+            MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService(), new com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator());
             CancelamentoResponse resposta = client.cancelar(servidor.url(), CHAVE_ACESSO, protocoloMalicioso,
                     "Erro no cadastro do veiculo de transporte", "SP", TipoAmbiente.HOMOLOGACAO, certificado, httpClient);
 
@@ -76,7 +76,7 @@ class MdfeCancelamentoClientTest {
     @Test
     void deveRejeitarJustificativaCurta() throws Exception {
         CertificadoCarregado certificado = certificadoDeTeste();
-        MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService());
+        MdfeCancelamentoClient client = new MdfeCancelamentoClient(null, null, new AssinaturaXmlService(), new com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator());
 
         assertThatThrownBy(() -> client.cancelar("https://exemplo.invalido", CHAVE_ACESSO, "935260000000001",
                 "curta", "SP", TipoAmbiente.HOMOLOGACAO, certificado, HttpClient.newHttpClient()))

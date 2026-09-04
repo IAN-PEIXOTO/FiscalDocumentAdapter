@@ -39,3 +39,6 @@ fiscaladapter:
     tipo-ambiente: producao
   seguranca:
     chave-criptografia: ${FISCALADAPTER_CHAVE_CRIPTOGRAFIA}
+    # FIS-97: mesma logica fail-fast acima - sem isso, cada instancia geraria seu proprio par de
+    # chaves RSA e um token emitido por uma instancia seria rejeitado pelas outras.
+    chave-rsa-jwk: ${FISCALADAPTER_CHAVE_RSA_JWK}

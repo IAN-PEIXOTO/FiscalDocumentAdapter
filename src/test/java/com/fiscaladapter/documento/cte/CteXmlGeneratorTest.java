@@ -60,6 +60,23 @@ class CteXmlGeneratorTest {
                 });
     }
 
+    @Test
+    void deveManterAsCasasDecimaisQuandoVRecForZero() throws Exception {
+        // FIS-91: vRec=0 e legitimo (frete sem cobranca separada, "Frete a pagar" ja incluso etc.)
+        // - o schema (TDec_1302) exige 2 casas decimais mesmo para zero.
+        Cte cteComFreteSemCobranca = comVRecZero(CteTestFixture.cteDeExemplo());
+
+        String xml = generator.gerar(cteComFreteSemCobranca);
+
+        assertThat(textoDe(parse(xml), "vRec")).isEqualTo("0.00");
+    }
+
+    private Cte comVRecZero(Cte original) {
+        return new Cte(original.identificacao(), original.emitente(), original.remetente(), original.destinatario(),
+                original.tomador(), original.valorTotalPrestacao(), java.math.BigDecimal.ZERO, original.imposto(),
+                original.informacaoCarga(), original.notasFiscaisTransportadas(), original.rntrc());
+    }
+
     private String textoDe(Document documento, String tag) {
         return documento.getElementsByTagName(tag).item(0).getTextContent();
     }

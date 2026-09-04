@@ -1,5 +1,6 @@
 package com.fiscaladapter.documento.mdfe;
 
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +36,7 @@ public class MdfeEncerramentoXmlGenerator {
                 + "<tpAmb>" + ambiente.codigo() + "</tpAmb>"
                 + "<CNPJ>" + cnpjAutorEvento + "</CNPJ>"
                 + "<chMDFe>" + chaveAcessoMdfe + "</chMDFe>"
-                + "<dhEvento>" + OffsetDateTime.now().format(DATA_EVENTO_FORMAT) + "</dhEvento>"
+                + "<dhEvento>" + OffsetDateTime.now(FusoHorarioFiscal.BRASIL).format(DATA_EVENTO_FORMAT) + "</dhEvento>"
                 + "<tpEvento>" + TP_EVENTO_ENCERRAMENTO + "</tpEvento>"
                 + "<nSeqEvento>" + nSeqEvento + "</nSeqEvento>"
                 + "<detEvento versaoEvento=\"3.00\">"

@@ -4,6 +4,7 @@ import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.documento.CodigoUfSefaz;
 import com.fiscaladapter.documento.mdfe.MdfeEncerramentoXmlGenerator;
+import com.fiscaladapter.documento.mdfe.MdfeEventoXsdValidator;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.sefaz.SefazHttpClientFactory;
@@ -36,13 +37,16 @@ public class MdfeEncerramentoClient {
     private final SefazHttpClientFactory httpClientFactory;
     private final AssinaturaXmlService assinaturaXmlService;
     private final MdfeEncerramentoXmlGenerator xmlGenerator;
+    private final MdfeEventoXsdValidator xsdValidator;
 
     public MdfeEncerramentoClient(MdfeEndpointRegistry endpointRegistry, SefazHttpClientFactory httpClientFactory,
-                                   AssinaturaXmlService assinaturaXmlService, MdfeEncerramentoXmlGenerator xmlGenerator) {
+                                   AssinaturaXmlService assinaturaXmlService, MdfeEncerramentoXmlGenerator xmlGenerator,
+                                   MdfeEventoXsdValidator xsdValidator) {
         this.endpointRegistry = endpointRegistry;
         this.httpClientFactory = httpClientFactory;
         this.assinaturaXmlService = assinaturaXmlService;
         this.xmlGenerator = xmlGenerator;
+        this.xsdValidator = xsdValidator;
     }
 
     public EncerramentoResponse encerrar(String chaveAcesso, String numeroProtocolo, String uf,
@@ -64,6 +68,15 @@ public class MdfeEncerramentoClient {
                 codigoMunicipioEncerramento, dataEncerramento, numeroProtocolo, ambiente);
 
         String eventoAssinado = assinaturaXmlService.assinar(eventoSemAssinatura, id, certificado);
+        // FIS-98: valida o envelope local antes de enviar, mesmo padrao dos pipelines principais de
+        // documento (CteEmissaoService/MdfeEmissaoService) - sem isso, um evento malformado (ex.:
+        // assinatura ausente/malformada, campos obrigatorios do envelope faltando) so seria
+        // detectado depois de uma ida e volta a SEFAZ. Nao usa validarEncerramento aqui porque essa
+        // validacao de conteudo (TProt/TCodMunIBGE) e mais estrita que a validacao de
+        // digitos-apenas ja feita em MdfeConsultaController - chamar aqui duplicaria a checagem
+        // sem ganho real, e a cobertura do conteudo do evEncMDFe em si ja e feita por
+        // MdfeEncerramentoXmlGeneratorTest.
+        xsdValidator.validarEnvelope(eventoAssinado);
         String eventoSemDeclaracao = eventoAssinado.replaceFirst("<\\?xml[^>]*\\?>", "");
 
         String respostaXml = MdfeSoapClient.enviarTextoPuro(httpClient, url, NAMESPACE, cUF, VERSAO_EVENTO, eventoSemDeclaracao);

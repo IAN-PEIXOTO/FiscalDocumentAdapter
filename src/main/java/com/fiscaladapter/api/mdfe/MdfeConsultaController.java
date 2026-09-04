@@ -4,6 +4,7 @@ import com.fiscaladapter.api.AmbienteEmissaoValidator;
 import com.fiscaladapter.api.ValidacaoParametros;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.certificado.CertificadoEmissorService;
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.mdfe.Mdfe;
 import com.fiscaladapter.documento.mdfe.MdfeXmlParser;
 import com.fiscaladapter.documento.mdfe.damdfe.DadosImpressaoDamdfe;
@@ -133,7 +134,10 @@ public class MdfeConsultaController {
         ambienteEmissaoValidator.validar(chaveAcesso, ambiente);
         CertificadoCarregado certificado = carregarCertificado(chaveAcesso, authentication);
 
-        LocalDate dataDeEncerramento = dataEncerramento != null ? dataEncerramento : LocalDate.now();
+        // FIS-92: usar o fuso fixo do Brasil (mesma classe de bug do FIS-84), nao o do JVM/SO -
+        // senao, perto da virada do dia, um deploy em fuso diferente registraria o dia calendario
+        // errado no encerramento do manifesto (campo com relevancia legal).
+        LocalDate dataDeEncerramento = dataEncerramento != null ? dataEncerramento : LocalDate.now(FusoHorarioFiscal.BRASIL);
         EncerramentoResponse resposta = encerramentoClient.encerrar(chaveAcesso, numeroProtocolo, uf,
                 codigoMunicipioEncerramento, dataDeEncerramento, ambiente, certificado);
 

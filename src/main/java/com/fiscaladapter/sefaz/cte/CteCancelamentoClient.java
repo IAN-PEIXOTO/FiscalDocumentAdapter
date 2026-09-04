@@ -3,6 +3,7 @@ package com.fiscaladapter.sefaz.cte;
 import com.fiscaladapter.assinatura.AssinaturaXmlService;
 import com.fiscaladapter.certificado.CertificadoCarregado;
 import com.fiscaladapter.documento.CodigoUfSefaz;
+import com.fiscaladapter.documento.FusoHorarioFiscal;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
 import com.fiscaladapter.sefaz.SefazComunicacaoException;
 import com.fiscaladapter.sefaz.SefazHttpClientFactory;
@@ -79,7 +80,7 @@ public class CteCancelamentoClient {
                 + "<tpAmb>" + ambiente.codigo() + "</tpAmb>"
                 + "<CNPJ>" + extrairCnpjDoCertificado(certificado) + "</CNPJ>"
                 + "<chCTe>" + chaveAcesso + "</chCTe>"
-                + "<dhEvento>" + OffsetDateTime.now().format(DATA_EVENTO_FORMAT) + "</dhEvento>"
+                + "<dhEvento>" + OffsetDateTime.now(FusoHorarioFiscal.BRASIL).format(DATA_EVENTO_FORMAT) + "</dhEvento>"
                 + "<tpEvento>" + TP_EVENTO_CANCELAMENTO + "</tpEvento>"
                 + "<nSeqEvento>" + Integer.parseInt(nSeqEvento) + "</nSeqEvento>"
                 + "<detEvento versaoEvento=\"" + VERSAO_EVENTO + "\">"

@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -95,6 +96,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return atual;
         });
         return janela.contador.incrementAndGet() > LIMITE_POR_MINUTO;
+    }
+
+    /**
+     * FIS-99: sem isso, janelasPorCliente cresce sem limite - toda chave distinta ja vista (nesse
+     * fallback nao autenticado, um client_id arbitrario escolhido pelo proprio chamador) ganha uma
+     * entrada que so e substituida, nunca removida. Roda a cada 5 minutos e descarta qualquer
+     * janela de um minuto anterior ao atual (uma janela so importa durante o proprio minuto).
+     */
+    @Scheduled(fixedRate = 300_000)
+    public void expurgarJanelasExpiradas() {
+        long minutoAtual = Instant.now().getEpochSecond() / 60;
+        janelasPorCliente.entrySet().removeIf(entry -> entry.getValue().minuto < minutoAtual);
     }
 
     private static final class Janela {

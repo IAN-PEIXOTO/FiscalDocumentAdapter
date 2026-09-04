@@ -13,6 +13,7 @@ class CatalogoRejeicaoSefazTest {
             "108, TRANSITORIO",
             "109, TRANSITORIO",
             "217, TRANSITORIO",
+            "656, TRANSITORIO",
             "204, CORRIGIVEL_PELO_CLIENTE",
             "215, CORRIGIVEL_PELO_CLIENTE",
             "225, CORRIGIVEL_PELO_CLIENTE",
@@ -24,7 +25,6 @@ class CatalogoRejeicaoSefazTest {
             "302, CORRIGIVEL_PELO_CLIENTE",
             "539, CORRIGIVEL_PELO_CLIENTE",
             "590, CORRIGIVEL_PELO_CLIENTE",
-            "656, CORRIGIVEL_PELO_CLIENTE",
             "110, CORRIGIVEL_PELO_CLIENTE",
     })
     void deveClassificarCodigosCatalogadosNaCategoriaCorreta(String codigo, CategoriaErroSefaz categoriaEsperada) {

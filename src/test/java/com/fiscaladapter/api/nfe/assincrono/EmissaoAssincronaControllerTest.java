@@ -90,6 +90,14 @@ class EmissaoAssincronaControllerTest {
     @MockBean
     private NfeAutorizacaoClient autorizacaoClient;
 
+    // FIS-90: WebhookNotifierService agora revalida a URL (protecao SSRF) a cada tentativa de
+    // entrega, nao so no cadastro - o que bloquearia o servidor de teste local (localhost) usado
+    // aqui para simular o receptor do webhook. Mockado (no-op) porque esse teste foca no fluxo de
+    // enfileiramento/processamento/notificacao, nao na validacao SSRF em si, que ja tem cobertura
+    // dedicada em WebhookNotifierServiceTest.
+    @MockBean
+    private com.fiscaladapter.webhook.WebhookUrlValidator webhookUrlValidator;
+
     private String clientId;
     private String clientSecret;
     private static String webhookSecret;

@@ -55,6 +55,21 @@ class MdfeXmlGeneratorTest {
     }
 
     @Test
+    void deveManterAsCasasDecimaisQuandoVCargaForZero() throws Exception {
+        // FIS-91: vCarga=0 e um caso de borda legitimo (ex.: carga sem valor declarado) - o schema
+        // (TDec_1302) exige 2 casas decimais mesmo para zero.
+        Mdfe original = MdfeTestFixture.mdfeDeExemplo();
+        Mdfe mdfeComCargaSemValor = new Mdfe(original.identificacao(), original.emitente(), original.rntrc(),
+                original.veiculoTracao(), original.condutores(), original.codigoMunicipioDescarga(),
+                original.municipioDescarga(), original.chavesCteTransportados(), original.chavesNfeTransportadas(),
+                java.math.BigDecimal.ZERO, original.pesoBrutoKg());
+
+        String xml = generator.gerar(mdfeComCargaSemValor);
+
+        assertThat(textoDe(parse(xml), "vCarga")).isEqualTo("0.00");
+    }
+
+    @Test
     void deveValidarContraOXsdOficialSemErrosAlemDaAssinaturaAusente() throws Exception {
         Mdfe mdfe = MdfeTestFixture.mdfeDeExemplo();
         String xml = generator.gerar(mdfe);

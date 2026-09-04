@@ -118,12 +118,25 @@ public class IdempotenciaService {
                 "Nao foi possivel registrar a requisicao idempotente apos " + MAX_TENTATIVAS + " tentativas");
     }
 
+    /**
+     * FIS-95: se esta requisicao ficou presa em PROCESSANDO por mais que TEMPO_LIMITE_PROCESSANDO
+     * (ver obterOuCriarPlaceholder), um retry concorrente pode ja ter apagado este placeholder e
+     * comecado a reprocessar antes do processamento original (este) terminar. Quando isso
+     * acontece, nao ha mais linha para marcar como concluida - mas o processamento em si terminou
+     * com sucesso, entao isso NAO deve virar excecao/500 para quem fez a requisicao original: so
+     * nao ha mais onde cachear a resposta (o proximo reenvio com a mesma chave vai reprocessar de
+     * novo, o que e uma duplicacao possivel mas rara, nao um erro deste request).
+     */
     private void concluir(String clientId, String tipoOperacao, String chave, Object resposta) {
-        transactionTemplate.executeWithoutResult(status -> {
-            RequisicaoIdempotente requisicao = repository.findByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave)
-                    .orElseThrow();
-            requisicao.concluir(serializar(resposta));
-        });
+        transactionTemplate.executeWithoutResult(status ->
+                repository.findByClientIdAndTipoOperacaoAndChave(clientId, tipoOperacao, chave)
+                        .ifPresentOrElse(
+                                requisicao -> requisicao.concluir(serializar(resposta)),
+                                () -> log.warn("Placeholder de idempotencia nao encontrado ao concluir - foi "
+                                                + "removido por reprocessamento concorrente antes deste "
+                                                + "processamento terminar; resposta nao sera cacheada "
+                                                + "(clientId={}, tipoOperacao={}, chave={})",
+                                        clientId, tipoOperacao, chave)));
     }
 
     private void removerPlaceholder(String clientId, String tipoOperacao, String chave) {

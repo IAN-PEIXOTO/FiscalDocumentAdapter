@@ -64,9 +64,13 @@ public final class CatalogoRejeicaoSefaz {
             Map.entry("590", new EntradaCatalogo(
                     "O CST informado nao e compativel com um emitente do Simples Nacional (CRT=1) - confira o Codigo de Regime Tributario e os CSTs usados nos itens.",
                     CategoriaErroSefaz.CORRIGIVEL_PELO_CLIENTE)),
+            // FIS-96: consumo indevido e a propria SEFAZ limitando a taxa de requisicoes do
+            // cliente - a acao correta e aguardar e tentar de novo (TRANSITORIO), nao "corrigir"
+            // um payload que nao tem nada de errado. Classificar como CORRIGIVEL_PELO_CLIENTE aqui
+            // levava o consumidor da API a reenviar sem alterar nada, piorando o throttling.
             Map.entry("656", new EntradaCatalogo(
                     "Consumo indevido detectado pela SEFAZ (excesso de requisicoes) - reduza a frequencia de chamadas antes de tentar novamente.",
-                    CategoriaErroSefaz.CORRIGIVEL_PELO_CLIENTE)),
+                    CategoriaErroSefaz.TRANSITORIO)),
 
             // Uso denegado por irregularidade fiscal cadastral - nao e um erro no payload em si,
             // mas exige uma acao do emitente/destinatario (fora do escopo desta API) antes de

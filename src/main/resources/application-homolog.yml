@@ -23,3 +23,5 @@ fiscaladapter:
     tipo-ambiente: homologacao
   seguranca:
     chave-criptografia: ${FISCALADAPTER_CHAVE_CRIPTOGRAFIA}
+    # FIS-97: mesma logica fail-fast do application-prod.yml (ver comentario la).
+    chave-rsa-jwk: ${FISCALADAPTER_CHAVE_RSA_JWK}

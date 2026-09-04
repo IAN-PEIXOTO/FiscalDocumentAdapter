@@ -235,10 +235,8 @@ public class CteXmlGenerator {
         return comCasas(valor, 4);
     }
 
+    /** FIS-91: mesmo caso do FIS-76 (NF-e) - o schema exige as casas decimais fixas mesmo para zero (ex.: vRec/vTPrest sem cobranca de frete). */
     private String comCasas(BigDecimal valor, int casas) {
-        if (valor.compareTo(BigDecimal.ZERO) == 0) {
-            return "0";
-        }
         return valor.setScale(casas, RoundingMode.HALF_UP).toPlainString();
     }
 
