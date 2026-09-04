@@ -64,6 +64,17 @@ class CertificadoEmissorServiceTest {
         assertThat(existente.getP12Criptografado()).isNotEqualTo("p12-antigo");
     }
 
+    /** FIS-85: certificado sem o padrao ICP-Brasil deve dar erro de validacao claro, nao 500 generico. */
+    @Test
+    void deveRejeitarCertificadoSemPadraoIcpBrasil() throws Exception {
+        byte[] p12 = TestCertificadoFactory.gerarP12SemOidIcpBrasil("senha123".toCharArray(),
+                Date.from(Instant.now().minus(Duration.ofDays(1))), Date.from(Instant.now().plus(Duration.ofDays(365))));
+
+        assertThatThrownBy(() -> service.registrar(CLIENT_ID, p12, "senha123".toCharArray()))
+                .isInstanceOf(CertificadoInvalidoException.class);
+        verify(repository, never()).save(any());
+    }
+
     @Test
     void deveRejeitarRegistroDeClientIdDiferenteDoDonoDoCnpj() throws Exception {
         byte[] p12 = certificadoDeTeste();

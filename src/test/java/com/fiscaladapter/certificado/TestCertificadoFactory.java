@@ -33,11 +33,21 @@ public final class TestCertificadoFactory {
     }
 
     public static byte[] gerarP12(String cnpj, char[] senha, Date validoDe, Date validoAte) throws Exception {
+        String subjectDn = "CN=EMPRESA TESTE LTDA:" + cnpj + ", OID.2.16.76.1.3.3=" + cnpj + ", O=ICP-Brasil, C=BR";
+        return gerarP12ComSubjectDn(subjectDn, senha, validoDe, validoAte);
+    }
+
+    /** FIS-85: certificado sem o RDN do OID ICP-Brasil (2.16.76.1.3.3) - simula um certificado generico/de teste. */
+    public static byte[] gerarP12SemOidIcpBrasil(char[] senha, Date validoDe, Date validoAte) throws Exception {
+        String subjectDn = "CN=CERTIFICADO GENERICO SEM PADRAO ICP-BRASIL, O=Alguma CA, C=BR";
+        return gerarP12ComSubjectDn(subjectDn, senha, validoDe, validoAte);
+    }
+
+    private static byte[] gerarP12ComSubjectDn(String subjectDn, char[] senha, Date validoDe, Date validoAte) throws Exception {
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
         keyPairGenerator.initialize(2048);
         KeyPair keyPair = keyPairGenerator.generateKeyPair();
 
-        String subjectDn = "CN=EMPRESA TESTE LTDA:" + cnpj + ", OID.2.16.76.1.3.3=" + cnpj + ", O=ICP-Brasil, C=BR";
         X500Name subject = new X500Name(subjectDn);
 
         X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(

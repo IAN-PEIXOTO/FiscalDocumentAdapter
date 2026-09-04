@@ -44,6 +44,14 @@ public class CertificadoEmissorService {
         CertificadoCarregado certificado = certificadoDigitalService.carregar(new ByteArrayInputStream(arquivoP12), senha);
         CertificadoInfo info = certificado.info();
 
+        // FIS-85: certificado sem o RDN do OID ICP-Brasil (2.16.76.1.3.3) - ex.: certificado de
+        // teste/homologacao generico - faria info.cnpj() vir null, violando a constraint NOT NULL
+        // da coluna e estourando um 500 generico em vez de um erro de validacao claro.
+        if (info.cnpj() == null) {
+            throw new CertificadoInvalidoException(
+                    "Certificado nao segue o padrao ICP-Brasil - nao foi possivel extrair o CNPJ do titular");
+        }
+
         autorizacaoEmissorService.garantirAutorizacao(clientId, info.cnpj());
 
         String p12Criptografado = Base64.getEncoder()
