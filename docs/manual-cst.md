@@ -98,27 +98,32 @@ Segue o mesmo mecanismo manual/opt-in de `SefazPrEmissaoNfeRealTest` (`@Tag
 variável de ambiente) — ver o javadoc da classe para instruções de execução.
 
 > **Resultado da execução real em 2026-09-09**: as 50 notas comunicaram-se de fato com a
-> SEFAZ (nenhuma exceção de transporte/parsing — o que o teste garante), mas nenhuma foi
-> autorizada de primeira. Três causas distintas foram investigadas:
+> SEFAZ (nenhuma exceção de transporte/parsing — o que o teste garante). As três causas
+> investigadas que impediam a autorização foram todas **resolvidas**:
 >
-> 1. **Endpoint normal de autorização da SEFAZ-PR devolveu HTTP 200 com corpo vazio** para
->    todas as tentativas (`Resposta da SEFAZ sem soap:Body`) — **não resolvido**, causa
->    raiz não identificada, ver FIS-112.
-> 2. **Contingência SVC-RS devolveu HTTP 403 "Access is denied"** (estilo IIS) — **não
->    resolvido**, parece bloqueio de infraestrutura/WAF, não um erro deste adapter, ver
->    FIS-112.
-> 3. **EPEC (último recurso) foi rejeitado com `cStat 493 "Evento nao atende o Schema XML
->    especifico"`** — **resolvido (FIS-113)**. O XSD oficial publicamente disponível
->    (nfephp-org/sped-nfe) mostra `vNF`/`vICMS` como irmãos de `dest` dentro de `detEvento`,
->    mas a SEFAZ real exige `vNF`/`vICMS`/`vST` **dentro** de `dest` — confirmado contra o
->    código-fonte do ACBr (`TEventoNFe.Gerar_DestNFe`), que documenta essa posição
->    explicitamente num comentário. Corrigido em `NfeEpecClient` e no XSD bundlado
->    (`xsd/nfe/epec/eventoEPEC_v1.00.xsd`). Reexecuções seguintes já não recebem mais
->    cStat 493 — passaram a receber rejeições de negócio legítimas (`cStat 266` "série não
->    permitida", `cStat 209` "IE do emitente inválida"), ambas esperadas por usarem dados
->    de teste fictícios, não uma falha estrutural.
+> 1. **Endpoint normal de autorização da SEFAZ-PR devolvia HTTP 200 com corpo vazio**
+>    (`Resposta da SEFAZ sem soap:Body`) — causa raiz: `NfeAutorizacaoClient` (usado por NFe
+>    e NFC-e) e `NfeInutilizacaoClient` embutiam o XML assinado (que preserva a declaração
+>    `<?xml ...?>`) no meio do envelope SOAP sem removê-la — XML mal formado que o servidor
+>    antigo da SEFAZ-PR (JBossWeb) engolia silenciosamente, devolvendo 200 vazio em vez de
+>    um erro. **Resolvido (FIS-114)**.
+> 2. **Contingência SVC-RS devolvia HTTP 403 "Access is denied"** — usa o mesmo
+>    `NfeAutorizacaoClient` do item 1; após o fix, deixou de ocorrer (o endpoint normal
+>    passou a responder de primeira, sem precisar cair para a SVC-RS nas reexecuções
+>    seguintes) — **resolvido junto com FIS-114**, mesma causa raiz.
+> 3. **EPEC era rejeitado com `cStat 493 "Evento nao atende o Schema XML especifico"`** —
+>    o XSD oficial publicamente disponível (nfephp-org/sped-nfe) mostra `vNF`/`vICMS` como
+>    irmãos de `dest` dentro de `detEvento`, mas a SEFAZ real exige `vNF`/`vICMS`/`vST`
+>    **dentro** de `dest` — confirmado contra o código-fonte do ACBr
+>    (`TEventoNFe.Gerar_DestNFe`). **Resolvido (FIS-113)**.
 >
-> Ver o relatório impresso pelo próprio teste para o detalhe de cada uma das 50 tentativas.
+> Uma reexecução do teste manual `SefazPrEmissaoNfeRealTest` após os três fixes recebeu, já
+> na primeira tentativa (sem precisar de contingência nem EPEC), uma resposta de negócio
+> legítima e nova: `cStat 434 "NFe sem indicativo do intermediador"` — o campo `indIntermed`
+> (indicador de intermediador/marketplace), obrigatório por uma Nota Técnica mais recente,
+> ainda não é gerado por este adapter (débito técnico novo, ver FIS-116).
+>
+> Ver o relatório impresso pelo próprio teste de 50 notas para o detalhe de cada tentativa.
 
 ## 7. Referências legais
 
