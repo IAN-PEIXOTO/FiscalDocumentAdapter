@@ -20,8 +20,12 @@
     <properties>
         <java.version>21</java.version>
         <!-- FIS-41: teste de carga (tag JUnit5 "carga") fica fora do `mvn verify` padrao -
-             sobrescrever com -Dsurefire.excludedGroups= (vazio) para incluir. -->
-        <surefire.excludedGroups>carga</surefire.excludedGroups>
+             sobrescrever com -Dsurefire.excludedGroups= (vazio) para incluir.
+             "homologacao-real" (ver com.fiscaladapter.homologacao): testes manuais que chamam a
+             SEFAZ de homologacao de verdade, exigem um certificado real fornecido via variavel de
+             ambiente - nunca rodam em CI (sem o certificado, seriam pulados de qualquer forma via
+             @EnabledIfEnvironmentVariable, mas ficam fora do escopo padrao por clareza). -->
+        <surefire.excludedGroups>carga,homologacao-real</surefire.excludedGroups>
     </properties>
 
     <dependencies>
