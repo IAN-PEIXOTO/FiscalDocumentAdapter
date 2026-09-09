@@ -116,7 +116,7 @@ class SefazPrEmissaoNfeRealTest {
         // anterior deste teste (SEFAZ rejeitaria com "204 - duplicidade" numa reexecucao com o
         // mesmo numero).
         long numero = System.currentTimeMillis() / 1000 % 100_000_000L;
-        IdentificacaoNfe ide = new IdentificacaoNfe(UF, "VENDA DE MERCADORIA", 900, numero,
+        IdentificacaoNfe ide = new IdentificacaoNfe(UF, "VENDA DE MERCADORIA", 1, numero,
                 LocalDate.now(ZoneId.of("America/Sao_Paulo")), TipoAmbiente.HOMOLOGACAO, 1, true,
                 CODIGO_MUNICIPIO_CURITIBA, TipoDocumentoFiscal.NFE);
 

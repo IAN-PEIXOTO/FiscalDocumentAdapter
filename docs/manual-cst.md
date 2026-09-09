@@ -97,19 +97,28 @@ Segue o mesmo mecanismo manual/opt-in de `SefazPrEmissaoNfeRealTest` (`@Tag
 ("homologacao-real")`, excluído do `mvn verify` por padrão, exige certificado real via
 variável de ambiente) — ver o javadoc da classe para instruções de execução.
 
-> **Resultado da execução real mais recente (2026-09-09) — débito técnico aberto,
-> declarado explicitamente**: as 50 notas comunicaram-se de fato com a SEFAZ (nenhuma
-> exceção de transporte/parsing — o que o teste garante), mas **nenhuma foi autorizada**:
-> (1) o endpoint normal de autorização da SEFAZ-PR devolveu HTTP 200 com corpo vazio para
-> todas as tentativas (`Resposta da SEFAZ sem soap:Body`) — causa raiz não identificada;
-> (2) a contingência SVC-RS devolveu HTTP 403 "Access is denied" (estilo IIS) — parece
-> bloqueio de infraestrutura/WAF, não um erro deste adapter; (3) o EPEC (último recurso)
-> foi rejeitado pela SEFAZ com `cStat 493 "Evento nao atende o Schema XML especifico"` —
-> **mesmo após validar o XML localmente contra o XSD oficial sem encontrar nenhum erro**
-> (`NfeEpecXsdValidator`), o que sugere uma divergência entre o schema publicamente
-> disponível (usado aqui) e o que a SEFAZ de fato aplica, ou uma regra de negócio adicional
-> não expressa no XSD. Os três pontos permanecem **não resolvidos** nesta sessão — ver o
-> relatório impresso pelo próprio teste para o detalhe de cada uma das 50 tentativas.
+> **Resultado da execução real em 2026-09-09**: as 50 notas comunicaram-se de fato com a
+> SEFAZ (nenhuma exceção de transporte/parsing — o que o teste garante), mas nenhuma foi
+> autorizada de primeira. Três causas distintas foram investigadas:
+>
+> 1. **Endpoint normal de autorização da SEFAZ-PR devolveu HTTP 200 com corpo vazio** para
+>    todas as tentativas (`Resposta da SEFAZ sem soap:Body`) — **não resolvido**, causa
+>    raiz não identificada, ver FIS-112.
+> 2. **Contingência SVC-RS devolveu HTTP 403 "Access is denied"** (estilo IIS) — **não
+>    resolvido**, parece bloqueio de infraestrutura/WAF, não um erro deste adapter, ver
+>    FIS-112.
+> 3. **EPEC (último recurso) foi rejeitado com `cStat 493 "Evento nao atende o Schema XML
+>    especifico"`** — **resolvido (FIS-113)**. O XSD oficial publicamente disponível
+>    (nfephp-org/sped-nfe) mostra `vNF`/`vICMS` como irmãos de `dest` dentro de `detEvento`,
+>    mas a SEFAZ real exige `vNF`/`vICMS`/`vST` **dentro** de `dest` — confirmado contra o
+>    código-fonte do ACBr (`TEventoNFe.Gerar_DestNFe`), que documenta essa posição
+>    explicitamente num comentário. Corrigido em `NfeEpecClient` e no XSD bundlado
+>    (`xsd/nfe/epec/eventoEPEC_v1.00.xsd`). Reexecuções seguintes já não recebem mais
+>    cStat 493 — passaram a receber rejeições de negócio legítimas (`cStat 266` "série não
+>    permitida", `cStat 209` "IE do emitente inválida"), ambas esperadas por usarem dados
+>    de teste fictícios, não uma falha estrutural.
+>
+> Ver o relatório impresso pelo próprio teste para o detalhe de cada uma das 50 tentativas.
 
 ## 7. Referências legais
 

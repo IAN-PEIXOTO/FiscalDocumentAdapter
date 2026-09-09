@@ -30,11 +30,18 @@ import java.util.regex.Pattern;
  *
  * O evento EPEC e sempre recebido pelo Ambiente Nacional - AN (cOrgao=91 fixo,
  * independente da UF do emitente; NAO e a SVC-RS, que tem seu proprio codigo
- * 93 e nem sequer expõe RecepcaoEvento para uso geral) - estrutura conferida
- * contra o XSD oficial (eventoEPEC_v1.00), a base de enderecos e a
- * implementacao de referencia nfephp-org/sped-nfe (Tools::sefazEPEC,
- * storage/wsnfe_4.00_mod55.xml, sped-common/UFList), incluindo o codigo de
+ * 93 e nem sequer expõe RecepcaoEvento para uso geral), incluindo o codigo de
  * sucesso do evento (cStat 136, diferente do 135 usado por cancelamento/CC-e).
+ *
+ * FIS-112: o XSD oficial publicamente disponivel (eventoEPEC_v1.00, obtido de
+ * nfephp-org/sped-nfe) mostra vNF/vICMS como irmaos de dest dentro de detEvento - mas a
+ * SEFAZ real rejeita essa estrutura com cStat 493 "Evento nao atende o Schema XML
+ * especifico", descoberto testando contra a SEFAZ-PR de homologacao de verdade. A
+ * estrutura correta (vNF/vICMS/vST DENTRO de dest) foi confirmada contra o codigo-fonte do
+ * ACBr (TEventoNFe.Gerar_DestNFe, ACBrNFe.EnvEvento.pas), que documenta essa mesma posicao
+ * explicitamente - ou seja, o XSD publicado esta desatualizado em relacao ao que a SEFAZ de
+ * fato aplica hoje (xsd/nfe/epec/eventoEPEC_v1.00.xsd, bundlado neste projeto, foi corrigido
+ * para refletir a estrutura real).
  */
 @Component
 public class NfeEpecClient {
@@ -90,9 +97,7 @@ public class NfeEpecClient {
                         .atStartOfDay(FusoHorarioFiscal.BRASIL).format(DATA_EVENTO_FORMAT) + "</dhEmi>"
                 + "<tpNF>1</tpNF>"
                 + "<IE>" + escaparXml(nfe.emitente().inscricaoEstadual()) + "</IE>"
-                + destinatario(nfe.destinatario())
-                + "<vNF>" + moeda(nfe.valorTotalNota()) + "</vNF>"
-                + "<vICMS>" + moeda(nfe.valorTotalIcms()) + "</vICMS>"
+                + destinatario(nfe.destinatario(), nfe.valorTotalNota(), nfe.valorTotalIcms())
                 + "</detEvento>"
                 + "</infEvento>"
                 + "</evento>";
@@ -118,7 +123,16 @@ public class NfeEpecClient {
         return interpretar(respostaXml);
     }
 
-    private String destinatario(Destinatario destinatario) {
+    /**
+     * FIS-112: apesar do que o XSD oficial (eventoEPEC_v1.00, obtido de nfephp-org/sped-nfe)
+     * sugere - vNF/vICMS como irmaos de dest dentro de detEvento - a SEFAZ real rejeita essa
+     * estrutura com cStat 493. Confirmado contra o codigo-fonte do ACBr
+     * (TEventoNFe.Gerar_DestNFe, ACBrNFe.EnvEvento.pas), que traz o comentario explicito "No EPEC
+     * da NF-e segundo o schema as TAGs vNF, vICMS e vST estao dentro do grupo dest" - ou seja, o
+     * XSD publicamente disponivel esta desatualizado em relacao ao que a SEFAZ de fato aplica. vST
+     * sempre "0.00" aqui: este adapter nao suporta ICMS-ST (ver docs/manual-cst.md).
+     */
+    private String destinatario(Destinatario destinatario, BigDecimal valorTotalNota, BigDecimal valorTotalIcms) {
         String tagDocumento = destinatario.ehPessoaJuridica() ? "CNPJ" : "CPF";
         String tagIe = destinatario.inscricaoEstadual() != null
                 ? "<IE>" + escaparXml(destinatario.inscricaoEstadual()) + "</IE>"
@@ -127,6 +141,9 @@ public class NfeEpecClient {
                 + "<UF>" + escaparXml(destinatario.endereco().uf()) + "</UF>"
                 + "<" + tagDocumento + ">" + destinatario.documentoSemMascara() + "</" + tagDocumento + ">"
                 + tagIe
+                + "<vNF>" + moeda(valorTotalNota) + "</vNF>"
+                + "<vICMS>" + moeda(valorTotalIcms) + "</vICMS>"
+                + "<vST>" + moeda(BigDecimal.ZERO) + "</vST>"
                 + "</dest>";
     }
 
