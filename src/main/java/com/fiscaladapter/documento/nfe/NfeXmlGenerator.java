@@ -73,6 +73,9 @@ public class NfeXmlGenerator {
             escreverTotal(xml, nfe);
             escreverTransporte(xml);
             escreverPagamento(xml, nfe);
+            if (nfe.intermediador() != null) {
+                escreverIntermediador(xml, nfe.intermediador());
+            }
 
             xml.writeEndElement(); // infNFe
             xml.writeEndElement(); // NFe
@@ -108,8 +111,17 @@ public class NfeXmlGenerator {
         tag(xml, "finNFe", String.valueOf(ide.finalidadeEmissao()));
         tag(xml, "indFinal", ide.consumidorFinal() ? "1" : "0");
         tag(xml, "indPres", ehNfce ? "1" : "9"); // NFC-e: 1 = operacao presencial; NFe: 9 = nao se aplica (emissao via API)
+        tag(xml, "indIntermed", ide.indicadorIntermediador()); // FIS-115: 0=sem intermediador, 1=marketplace/plataforma de terceiros
         tag(xml, "procEmi", "0"); // emissao por aplicativo do contribuinte
         tag(xml, "verProc", "1.0.0");
+        xml.writeEndElement();
+    }
+
+    /** FIS-115: grupo infIntermed, filho direto de infNFe (nao de ide) - so emitido quando ha intermediador. */
+    private void escreverIntermediador(XMLStreamWriter xml, Intermediador intermediador) throws XMLStreamException {
+        xml.writeStartElement("infIntermed");
+        tag(xml, "CNPJ", intermediador.cnpj());
+        tag(xml, "idCadIntTran", intermediador.identificadorCadastro());
         xml.writeEndElement();
     }
 

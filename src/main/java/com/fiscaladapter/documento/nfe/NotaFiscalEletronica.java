@@ -9,12 +9,20 @@ public record NotaFiscalEletronica(
         Destinatario destinatario,
         List<ItemNota> itens,
         List<DetalhePagamento> pagamentos,
-        BigDecimal valorTroco
+        BigDecimal valorTroco,
+        /** FIS-115: nulo quando identificacao().indicadorIntermediador() == "0" (sem intermediador). */
+        Intermediador intermediador
 ) {
     /** Sem troco (FIS-72) - mantido para nao quebrar os chamadores existentes que nao usam vTroco. */
     public NotaFiscalEletronica(IdentificacaoNfe identificacao, Emitente emitente, Destinatario destinatario,
                                  List<ItemNota> itens, List<DetalhePagamento> pagamentos) {
-        this(identificacao, emitente, destinatario, itens, pagamentos, BigDecimal.ZERO);
+        this(identificacao, emitente, destinatario, itens, pagamentos, BigDecimal.ZERO, null);
+    }
+
+    /** Com troco, sem intermediador - mantido para nao quebrar os chamadores existentes (FIS-115). */
+    public NotaFiscalEletronica(IdentificacaoNfe identificacao, Emitente emitente, Destinatario destinatario,
+                                 List<ItemNota> itens, List<DetalhePagamento> pagamentos, BigDecimal valorTroco) {
+        this(identificacao, emitente, destinatario, itens, pagamentos, valorTroco, null);
     }
 
     public BigDecimal valorTotalProdutos() {

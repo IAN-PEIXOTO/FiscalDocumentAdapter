@@ -64,10 +64,14 @@ confiar em soma de imposto vinda do cliente.
     "dest": { ... },
     "det": [ { "nItem": 1, "prod": { ... }, "imposto": { ... } } ],
     "transp": { "modFrete": 9 },
-    "pag": { "detPag": [ { "tPag": "01", "vPag": 1000.00 } ] }
+    "pag": { "detPag": [ { "tPag": "01", "vPag": 1000.00 } ] },
+    "intermediador": { "CNPJ": "...", "idCadIntTran": "..." }
   }
 }
 ```
+
+`intermediador` é opcional — só é aceito/obrigatório quando `ide.indIntermed == 1` (ver seção
+2 e RVN-007); omita o campo inteiro para o caso comum (venda em site/plataforma própria).
 
 **`ide`** (identificação):
 
@@ -89,6 +93,14 @@ confiar em soma de imposto vinda do cliente.
 | `indPres` | inteiro | sim | indicador de presença do comprador |
 | `procEmi` | inteiro | sim | processo de emissão (0=aplicativo do contribuinte) |
 | `verProc` | texto | sim | versão do seu sistema emissor |
+| `indIntermed` | inteiro | não | indicador de intermediador/marketplace (FIS-115) — `0`=operação em site/plataforma própria (padrão quando omitido), `1`=operação via site/plataforma de terceiros. Quando `1`, o grupo `intermediador` (ver abaixo) passa a ser obrigatório (RVN-007) |
+
+**`intermediador`** — só relevante (e só aceito) quando `ide.indIntermed == 1`: `CNPJ` (do
+agenciador/marketplace/plataforma de delivery) e `idCadIntTran` (identificador do emitente
+cadastrado nesse intermediador, 2 a 60 caracteres). A SEFAZ passou a exigir `indIntermed` de
+fato (rejeição `cStat 434 "NFe sem indicativo do intermediador"` quando ausente) — descoberto
+testando emissão real contra a SEFAZ-PR de homologação, não documentado no XSD como campo
+obrigatório (lá `indIntermed` é `minOccurs="0"`).
 
 **`emit`** (emitente): `CNPJ` ou `CPF`, `xNome`, `xFant` (opcional), `enderEmit`
 (endereço completo — `xLgr`, `nro`, `xCpl` opcional, `xBairro`, `cMun`, `xMun`, `UF`,
@@ -164,6 +176,7 @@ violada em `detalhes` (`RVN-XXX: mensagem`).
 | RVN-004 | `RegraSomaPagamentosIgualTotal` | soma de `vPag` = valor total da nota (tolerância R$ 0,01) |
 | RVN-005 | `RegraRegimeTributarioCompativelComIcms` | CRT do emitente compatível com o grupo de ICMS usado (CST × CSOSN) |
 | RVN-006 | `RegraDataEmissaoNaoFutura` | `dhEmi` não é posterior à data atual |
+| RVN-007 | `RegraIntermediadorConsistente` | `indIntermed=1` exige o grupo `intermediador` preenchido, e vice-versa |
 
 Estes códigos (`RVN-XXX`) são **próprios deste adapter**, não os códigos numéricos
 oficiais da SEFAZ (que têm centenas de regras — a planilha "Regras de Validação de
@@ -340,6 +353,7 @@ resposta, mesmo para códigos não catalogados. Quando a operação falhou,
 | 241 | Número da NF-e (série/CNPJ) já utilizado | CORRIGIVEL_PELO_CLIENTE |
 | 301 | Uso denegado — irregularidade cadastral do emitente | CORRIGIVEL_PELO_CLIENTE |
 | 302 | Uso denegado — irregularidade cadastral do destinatário | CORRIGIVEL_PELO_CLIENTE |
+| 434 | NFe sem indicativo do intermediador (`indIntermed`, FIS-115) | CORRIGIVEL_PELO_CLIENTE |
 | 539 | Já existe documento autorizado com mesmo número/série/CNPJ, chave diferente | CORRIGIVEL_PELO_CLIENTE |
 | 590 | CST incompatível com emitente do Simples Nacional | CORRIGIVEL_PELO_CLIENTE |
 | 656 | Consumo indevido (excesso de requisições) | CORRIGIVEL_PELO_CLIENTE |

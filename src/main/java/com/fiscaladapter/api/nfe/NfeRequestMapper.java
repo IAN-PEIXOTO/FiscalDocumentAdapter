@@ -8,6 +8,7 @@ import com.fiscaladapter.documento.nfe.Emitente;
 import com.fiscaladapter.documento.nfe.Endereco;
 import com.fiscaladapter.documento.nfe.IdentificacaoNfe;
 import com.fiscaladapter.documento.nfe.ImpostoItem;
+import com.fiscaladapter.documento.nfe.Intermediador;
 import com.fiscaladapter.documento.nfe.ItemNota;
 import com.fiscaladapter.documento.nfe.NotaFiscalEletronica;
 import com.fiscaladapter.documento.nfe.TipoAmbiente;
@@ -34,7 +35,8 @@ public class NfeRequestMapper {
                 destinatario(infNFe.dest()),
                 itens(infNFe.det()),
                 pagamentos(infNFe.pag()),
-                infNFe.pag().vTroco() != null ? infNFe.pag().vTroco() : BigDecimal.ZERO
+                infNFe.pag().vTroco() != null ? infNFe.pag().vTroco() : BigDecimal.ZERO,
+                intermediador(infNFe.intermediador())
         );
     }
 
@@ -49,8 +51,15 @@ public class NfeRequestMapper {
                 ide.finNFe(),
                 ide.indFinal() == 1,
                 ide.cMunFG(),
-                tipoDocumento
+                tipoDocumento,
+                // FIS-115: payload antigo (campo omitido) vira "0" - sem intermediador, o caso mais comum.
+                ide.indIntermed() != null ? String.valueOf(ide.indIntermed()) : "0"
         );
+    }
+
+    /** FIS-115: nulo quando o payload nao informa intermediador (indIntermed=0, o caso mais comum). */
+    private Intermediador intermediador(IntermediadorRequest intermediador) {
+        return intermediador != null ? new Intermediador(intermediador.CNPJ(), intermediador.idCadIntTran()) : null;
     }
 
     private Emitente emitente(EmitRequest emit) {

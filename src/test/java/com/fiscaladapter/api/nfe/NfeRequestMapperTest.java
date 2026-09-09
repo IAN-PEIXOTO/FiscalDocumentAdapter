@@ -64,6 +64,54 @@ class NfeRequestMapperTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /** FIS-115: payload antigo (sem indIntermed) deve virar "0" no dominio - nao pode quebrar integracoes existentes. */
+    @Test
+    void deveMapearIndIntermedComoZeroQuandoOmitidoNoPayload() {
+        NfePedidoEmissaoRequest pedido = pedidoCom(new IcmsRequest(new Icms00Request("0", "00", 3,
+                BigDecimal.valueOf(100.00), BigDecimal.valueOf(18.00), BigDecimal.valueOf(18.00)), null, null));
+
+        NotaFiscalEletronica nfe = mapper.paraDominio(pedido);
+
+        assertThat(nfe.identificacao().indicadorIntermediador()).isEqualTo("0");
+        assertThat(nfe.intermediador()).isNull();
+    }
+
+    @Test
+    void deveMapearIndIntermedEGrupoIntermediadorQuandoInformados() {
+        EnderecoNfeRequest enderecoEmitente = new EnderecoNfeRequest("Rua Teste", "100", null, "Centro", "3550308", "Sao Paulo", "SP", "01000000", "1058", "Brasil", "1130000000");
+        EmitRequest emit = new EmitRequest("12345678000199", null, "EMPRESA TESTE LTDA", "TESTE", enderecoEmitente, "111222333", null, null, null, "1");
+
+        EnderecoNfeRequest enderecoDestinatario = new EnderecoNfeRequest("Av. Cliente", "200", null, "Jardins", "3550308", "Sao Paulo", "SP", "02000000", "1058", "Brasil", null);
+        DestRequest dest = new DestRequest(null, "98765432100", null, "CLIENTE TESTE", enderecoDestinatario, 9, null, null, null, "cliente@teste.com");
+
+        Icms00Request icms00 = new Icms00Request("0", "00", 3, BigDecimal.valueOf(100.00), BigDecimal.valueOf(18.00), BigDecimal.valueOf(18.00));
+        PisAliqRequest pisAliq = new PisAliqRequest("01", BigDecimal.valueOf(100.00), BigDecimal.valueOf(1.65), BigDecimal.valueOf(1.65));
+        CofinsAliqRequest cofinsAliq = new CofinsAliqRequest("01", BigDecimal.valueOf(100.00), BigDecimal.valueOf(7.60), BigDecimal.valueOf(7.60));
+        ImpostoRequest imposto = new ImpostoRequest(new IcmsRequest(icms00, null, null), null, new PisRequest(pisAliq), new CofinsRequest(cofinsAliq));
+
+        ProdRequest prod = new ProdRequest("PROD001", "SEM GTIN", "PRODUTO TESTE", "61099010", "5102", "UN",
+                BigDecimal.ONE, BigDecimal.valueOf(100.00), BigDecimal.valueOf(100.00),
+                "SEM GTIN", "UN", BigDecimal.ONE, BigDecimal.valueOf(100.00), 1);
+        DetRequest det = new DetRequest(1, prod, imposto);
+
+        IdeRequest ide = new IdeRequest(35, "VENDA DE MERCADORIA", 1, 42L, LocalDate.of(2026, 3, 15),
+                1, 1, "3550308", 1, 1, 2, 1, 1, 9, 0, "1.0.0", 1);
+
+        TranspRequest transp = new TranspRequest(9);
+        PagRequest pag = new PagRequest(List.of(new DetPagRequest("01", BigDecimal.valueOf(100.00))));
+        IntermediadorRequest intermediador = new IntermediadorRequest("11222333000181", "LOJA123");
+
+        InfNfeRequest infNFe = new InfNfeRequest(ide, emit, dest, List.of(det), transp, pag, intermediador);
+        NfePedidoEmissaoRequest pedido = new NfePedidoEmissaoRequest("homologacao", "teste-001", infNFe);
+
+        NotaFiscalEletronica nfe = mapper.paraDominio(pedido);
+
+        assertThat(nfe.identificacao().indicadorIntermediador()).isEqualTo("1");
+        assertThat(nfe.intermediador()).isNotNull();
+        assertThat(nfe.intermediador().cnpj()).isEqualTo("11222333000181");
+        assertThat(nfe.intermediador().identificadorCadastro()).isEqualTo("LOJA123");
+    }
+
     private ImpostoItem mapearImposto(IcmsRequest icms) {
         NfePedidoEmissaoRequest pedido = pedidoCom(icms);
         NotaFiscalEletronica nfe = mapper.paraDominio(pedido);

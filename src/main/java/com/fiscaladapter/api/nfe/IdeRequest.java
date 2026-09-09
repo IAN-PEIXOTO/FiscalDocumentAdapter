@@ -26,6 +26,18 @@ public record IdeRequest(
         @NotNull Integer indFinal,
         @NotNull Integer indPres,
         @NotNull Integer procEmi,
-        @NotBlank String verProc
+        @NotBlank String verProc,
+        /**
+         * FIS-115: 0=sem intermediador, 1=via site/plataforma de terceiros (marketplace) - nulo
+         * (payload antigo, campo omitido) e tratado pelo mapper como "0", o caso mais comum.
+         */
+        Integer indIntermed
 ) {
+    /** Sem indIntermed explicito - mantido para nao quebrar chamadores existentes (FIS-115). */
+    public IdeRequest(Integer cUF, String natOp, Integer serie, Long nNF, LocalDate dhEmi, Integer tpNF,
+                       Integer idDest, String cMunFG, Integer tpImp, Integer tpEmis, Integer tpAmb, Integer finNFe,
+                       Integer indFinal, Integer indPres, Integer procEmi, String verProc) {
+        this(cUF, natOp, serie, nNF, dhEmi, tpNF, idDest, cMunFG, tpImp, tpEmis, tpAmb, finNFe, indFinal, indPres,
+                procEmi, verProc, null);
+    }
 }

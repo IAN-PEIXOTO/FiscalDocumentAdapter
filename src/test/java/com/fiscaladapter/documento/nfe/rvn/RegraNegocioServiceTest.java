@@ -24,7 +24,8 @@ class RegraNegocioServiceTest {
             new RegraCfopCompativelComOperacao(),
             new RegraSomaPagamentosIgualTotal(),
             new RegraRegimeTributarioCompativelComIcms(),
-            new RegraDataEmissaoNaoFutura()
+            new RegraDataEmissaoNaoFutura(),
+            new RegraIntermediadorConsistente()
     ));
 
     @Test
@@ -157,6 +158,35 @@ class RegraNegocioServiceTest {
                 .isInstanceOf(RegraNegocioVioladaException.class)
                 .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
                         .anyMatch(v -> v.codigo().equals("RVN-006")));
+    }
+
+    @Test
+    void deveRejeitarIndIntermedUmSemGrupoIntermediador() {
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        IdentificacaoNfe ideComIndIntermedUm = new IdentificacaoNfe(base.identificacao().uf(), base.identificacao().naturezaOperacao(),
+                base.identificacao().serie(), base.identificacao().numero(), base.identificacao().dataEmissao(),
+                base.identificacao().ambiente(), base.identificacao().finalidadeEmissao(), base.identificacao().consumidorFinal(),
+                base.identificacao().codigoMunicipioFatoGerador(), base.identificacao().tipoDocumento(), "1");
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(ideComIndIntermedUm, base.emitente(), base.destinatario(),
+                base.itens(), base.pagamentos());
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-007")));
+    }
+
+    @Test
+    void deveRejeitarGrupoIntermediadorInformadoComIndIntermedZero() {
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(base.identificacao(), base.emitente(), base.destinatario(),
+                base.itens(), base.pagamentos(), BigDecimal.ZERO,
+                new com.fiscaladapter.documento.nfe.Intermediador("11222333000181", "LOJA123"));
+
+        assertThatThrownBy(() -> service.validar(nfe))
+                .isInstanceOf(RegraNegocioVioladaException.class)
+                .satisfies(e -> assertThat(((RegraNegocioVioladaException) e).getViolacoes())
+                        .anyMatch(v -> v.codigo().equals("RVN-007")));
     }
 
     private ItemNota trocarValorTotal(ItemNota original, BigDecimal novoValorTotal) {

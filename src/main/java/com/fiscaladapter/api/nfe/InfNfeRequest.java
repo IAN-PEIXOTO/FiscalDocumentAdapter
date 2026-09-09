@@ -24,6 +24,13 @@ public record InfNfeRequest(
         @Valid DestRequest dest,
         @NotEmpty List<@Valid DetRequest> det,
         @NotNull @Valid TranspRequest transp,
-        @NotNull @Valid PagRequest pag
+        @NotNull @Valid PagRequest pag,
+        /** FIS-115: so obrigatorio quando ide.indIntermed() == 1 (ver RVN-007). */
+        @Valid IntermediadorRequest intermediador
 ) {
+    /** Sem intermediador - mantido para nao quebrar chamadores existentes (FIS-115). */
+    public InfNfeRequest(IdeRequest ide, EmitRequest emit, DestRequest dest, List<DetRequest> det,
+                          TranspRequest transp, PagRequest pag) {
+        this(ide, emit, dest, det, transp, pag, null);
+    }
 }

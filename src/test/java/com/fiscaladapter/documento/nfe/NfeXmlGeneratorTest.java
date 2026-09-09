@@ -123,6 +123,43 @@ class NfeXmlGeneratorTest {
         assertApenasAssinaturaAusente(xml);
     }
 
+    /** FIS-115: indIntermed=0 (sem intermediador) e o default - nao deve gerar o grupo infIntermed. */
+    @Test
+    void deveGerarIndIntermedZeroPorPadraoSemGrupoInfIntermed() throws Exception {
+        NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        assertThat(textoDe(documento, "indIntermed")).isEqualTo("0");
+        assertThat(documento.getElementsByTagName("infIntermed").getLength()).isEqualTo(0);
+        assertApenasAssinaturaAusente(xml);
+    }
+
+    /** FIS-115: indIntermed=1 (marketplace) exige o grupo infIntermed (CNPJ + idCadIntTran). */
+    @Test
+    void deveGerarIndIntermedUmComGrupoInfIntermedQuandoHaIntermediador() throws Exception {
+        NotaFiscalEletronica base = NotaFiscalEletronicaTestFixture.notaDeExemplo();
+        IdentificacaoNfe ideComIntermediador = new IdentificacaoNfe(base.identificacao().uf(),
+                base.identificacao().naturezaOperacao(), base.identificacao().serie(), base.identificacao().numero(),
+                base.identificacao().dataEmissao(), base.identificacao().ambiente(), base.identificacao().finalidadeEmissao(),
+                base.identificacao().consumidorFinal(), base.identificacao().codigoMunicipioFatoGerador(),
+                base.identificacao().tipoDocumento(), "1");
+        NotaFiscalEletronica nfe = new NotaFiscalEletronica(ideComIntermediador, base.emitente(), base.destinatario(),
+                base.itens(), base.pagamentos(), java.math.BigDecimal.ZERO,
+                new Intermediador("11222333000181", "LOJA123"));
+
+        String xml = generator.gerar(nfe);
+        Document documento = parse(xml);
+
+        assertThat(textoDe(documento, "indIntermed")).isEqualTo("1");
+        Element infIntermed = (Element) documento.getElementsByTagName("infIntermed").item(0);
+        assertThat(infIntermed).isNotNull();
+        assertThat(infIntermed.getElementsByTagName("CNPJ").item(0).getTextContent()).isEqualTo("11222333000181");
+        assertThat(infIntermed.getElementsByTagName("idCadIntTran").item(0).getTextContent()).isEqualTo("LOJA123");
+        assertApenasAssinaturaAusente(xml);
+    }
+
     @Test
     void naoDeveGerarVTrocoQuandoNaoHaTroco() throws Exception {
         NotaFiscalEletronica nfe = NotaFiscalEletronicaTestFixture.notaDeExemplo();
