@@ -1,6 +1,10 @@
 package com.fiscaladapter.certificado;
 
+import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.ASN1String;
+import org.bouncycastle.asn1.ASN1TaggedObject;
 import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.IETFUtils;
@@ -12,9 +16,12 @@ import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Enumeration;
+import java.util.List;
 
 /**
  * Carrega e valida certificados digitais A1 (PKCS#12) de emissores.
@@ -94,10 +101,25 @@ public class CertificadoDigitalService {
     }
 
     /**
-     * Extrai o CNPJ do Subject DN conforme padrao ICP-Brasil (OID 2.16.76.1.3.3).
-     * Retorna null se o certificado nao seguir o padrao (ex.: certificado de teste generico).
+     * Extrai o CNPJ do certificado conforme o padrao ICP-Brasil (OID 2.16.76.1.3.3). Um certificado
+     * e-CNPJ REAL emitido por qualquer AC credenciada (confirmado empiricamente contra um
+     * certificado real da RTI Sistemas) codifica esse OID dentro da extensao Subject Alternative
+     * Name, como um "otherName" - NAO como um RDN do Subject DN. `TestCertificadoFactory` (usado em
+     * todos os testes deste projeto) monta certificados sinteticos com o OID direto no Subject DN
+     * por simplicidade, entao o codigo original (so verificava o Subject DN) nunca falhava nos
+     * testes, apesar de nao funcionar contra NENHUM certificado real - so descoberto ao testar
+     * contra um certificado de verdade.
      */
     private String extrairCnpj(X509Certificate certificado) {
+        String cnpjDoSubjectDn = extrairCnpjDoSubjectDn(certificado);
+        if (cnpjDoSubjectDn != null) {
+            return cnpjDoSubjectDn;
+        }
+        return extrairCnpjDoSubjectAlternativeName(certificado);
+    }
+
+    /** Formato usado pelos certificados sinteticos de teste (ver TestCertificadoFactory). */
+    private String extrairCnpjDoSubjectDn(X509Certificate certificado) {
         try {
             X500Name subject = new JcaX509CertificateHolder(certificado).getSubject();
             RDN[] rdns = subject.getRDNs(OID_CNPJ_ICP_BRASIL);
@@ -109,6 +131,46 @@ public class CertificadoDigitalService {
         } catch (CertificateEncodingException e) {
             return null;
         }
+    }
+
+    /** Formato usado por certificados e-CNPJ reais emitidos por qualquer AC da ICP-Brasil. */
+    private String extrairCnpjDoSubjectAlternativeName(X509Certificate certificado) {
+        try {
+            Collection<List<?>> nomesAlternativos = certificado.getSubjectAlternativeNames();
+            if (nomesAlternativos == null) {
+                return null;
+            }
+            for (List<?> nome : nomesAlternativos) {
+                if (!(nome.get(0) instanceof Integer tipo) || tipo != 0) {
+                    continue; // 0 = otherName (ver GeneralName da RFC 5280)
+                }
+                if (!(nome.get(1) instanceof byte[] bytesDoOtherName)) {
+                    continue;
+                }
+                String cnpj = extrairCnpjDoOtherName(bytesDoOtherName);
+                if (cnpj != null) {
+                    return cnpj;
+                }
+            }
+            return null;
+        } catch (CertificateParsingException e) {
+            return null;
+        }
+    }
+
+    private String extrairCnpjDoOtherName(byte[] bytesDoOtherName) {
+        ASN1Sequence outroNome = ASN1Sequence.getInstance(bytesDoOtherName);
+        ASN1ObjectIdentifier oid = ASN1ObjectIdentifier.getInstance(outroNome.getObjectAt(0));
+        if (!OID_CNPJ_ICP_BRASIL.equals(oid)) {
+            return null;
+        }
+        ASN1TaggedObject valorMarcado = ASN1TaggedObject.getInstance(outroNome.getObjectAt(1));
+        ASN1Encodable valor = valorMarcado.getExplicitBaseObject();
+        String texto = valor instanceof ASN1String asn1String ? asn1String.getString() : valor.toString();
+        // a ICP-Brasil as vezes concatena outros dados apos o CNPJ nesse campo - os primeiros 14
+        // digitos numericos sao sempre o CNPJ.
+        String digitos = texto.replaceAll("\\D", "");
+        return digitos.length() >= 14 ? digitos.substring(0, 14) : null;
     }
 
     public void validarNaoExpirado(CertificadoInfo info) {

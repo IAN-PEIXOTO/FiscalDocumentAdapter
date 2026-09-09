@@ -93,7 +93,6 @@ public class NfeEpecClient {
                 + destinatario(nfe.destinatario())
                 + "<vNF>" + moeda(nfe.valorTotalNota()) + "</vNF>"
                 + "<vICMS>" + moeda(nfe.valorTotalIcms()) + "</vICMS>"
-                + "<vST>" + moeda(BigDecimal.ZERO) + "</vST>"
                 + "</detEvento>"
                 + "</infEvento>"
                 + "</evento>";
@@ -106,6 +105,14 @@ public class NfeEpecClient {
                 + eventoAssinado.replaceFirst("<\\?xml[^>]*\\?>", "")
                 + "</envEvento>";
 
+        // FIS-110: nao chama NfeEpecXsdValidator aqui de proposito, ao contrario dos pipelines
+        // principais de documento - o schema do EPEC nao tem nenhum xs:any/skip (diferente do
+        // envelope de evento do MDF-e, ver FIS-98), entao validar aqui tambem validaria o CONTEUDO
+        // dos campos (IE/UF) contra padroes estritos (soh digitos) - e os testes de escaping deste
+        // cliente (FIS-67) usam de proposito valores com marcacao para provar que nao ha injecao de
+        // XML, valores que nunca bateriam nesses padroes mesmo depois de escapados corretamente.
+        // NfeEpecXsdValidator e exercitado nos testes com dados legitimos (ver NfeEpecClientTest) -
+        // foi assim, alias, que o bug do <vST> extra (removido nesta mesma correcao) foi descoberto.
         String respostaXml = SoapClient.enviar(httpClient, url, NAMESPACE, COD_ORGAO_EPEC, "1.00", envEvento);
 
         return interpretar(respostaXml);

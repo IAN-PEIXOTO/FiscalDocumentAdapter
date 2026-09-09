@@ -66,9 +66,16 @@ final class SoapClient {
     }
 
     private static String extrairConteudoResultMsg(String respostaSoap) {
+        // FIS-110: precisa checar inicioTag < 0 ANTES de chamar tagComPrefixo(respostaSoap,
+        // inicioTag) - com inicioTag=-1 (nfeResultMsg ausente, ex.: a SEFAZ devolveu um SOAP Fault
+        // em vez da resposta normal), tagComPrefixo fazia xml.substring(0, -1) e lancava
+        // StringIndexOutOfBoundsException em vez do SefazComunicacaoException informativo abaixo.
         int inicioTag = respostaSoap.indexOf("nfeResultMsg");
+        if (inicioTag < 0) {
+            throw new SefazComunicacaoException("Resposta da SEFAZ nao contem nfeResultMsg: " + respostaSoap);
+        }
         int fimTagFechamento = respostaSoap.indexOf("</" + tagComPrefixo(respostaSoap, inicioTag));
-        if (inicioTag < 0 || fimTagFechamento < 0) {
+        if (fimTagFechamento < 0) {
             throw new SefazComunicacaoException("Resposta da SEFAZ nao contem nfeResultMsg: " + respostaSoap);
         }
         int inicioConteudo = respostaSoap.indexOf('>', inicioTag) + 1;

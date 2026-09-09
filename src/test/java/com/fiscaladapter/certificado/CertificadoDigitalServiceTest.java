@@ -30,6 +30,27 @@ class CertificadoDigitalServiceTest {
         assertThat(carregado.info().expirado(Instant.now())).isFalse();
     }
 
+    /**
+     * FIS-110: certificados e-CNPJ REAIS codificam o CNPJ como "otherName" na extensao Subject
+     * Alternative Name, nao como RDN do Subject DN (formato que so o certificado sintetico de
+     * {@link #deveCarregarCertificadoValidoEExtrairCnpj} usa) - confirmado ao testar contra um
+     * certificado real, que devolvia CNPJ null antes desta correcao.
+     */
+    @Test
+    void deveExtrairCnpjDoSubjectAlternativeNameQuandoNaoEstiverNoSubjectDn() throws Exception {
+        char[] senha = "senha123".toCharArray();
+        byte[] p12 = TestCertificadoFactory.gerarP12ComCnpjNoSubjectAlternativeName(
+                "09116326000153",
+                senha,
+                Date.from(Instant.now().minus(Duration.ofDays(1))),
+                Date.from(Instant.now().plus(Duration.ofDays(365)))
+        );
+
+        CertificadoCarregado carregado = service.carregar(TestCertificadoFactory.comoStream(p12), senha);
+
+        assertThat(carregado.info().cnpj()).isEqualTo("09116326000153");
+    }
+
     @Test
     void deveRejeitarSenhaIncorreta() throws Exception {
         byte[] p12 = TestCertificadoFactory.gerarP12(

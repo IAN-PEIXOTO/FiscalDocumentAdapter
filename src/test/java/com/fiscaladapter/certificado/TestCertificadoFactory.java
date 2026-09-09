@@ -1,6 +1,15 @@
 package com.fiscaladapter.certificado;
 
+import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.DERSequence;
+import org.bouncycastle.asn1.DERTaggedObject;
+import org.bouncycastle.asn1.DERUTF8String;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
@@ -41,6 +50,51 @@ public final class TestCertificadoFactory {
     public static byte[] gerarP12SemOidIcpBrasil(char[] senha, Date validoDe, Date validoAte) throws Exception {
         String subjectDn = "CN=CERTIFICADO GENERICO SEM PADRAO ICP-BRASIL, O=Alguma CA, C=BR";
         return gerarP12ComSubjectDn(subjectDn, senha, validoDe, validoAte);
+    }
+
+    /**
+     * FIS-110: certificados e-CNPJ REAIS (confirmado empiricamente contra um certificado real de
+     * uma AC credenciada) nao colocam o OID do CNPJ (2.16.76.1.3.3) como RDN do Subject DN como
+     * {@link #gerarP12} simula - colocam como "otherName" dentro da extensao Subject Alternative
+     * Name (RFC 5280 GeneralName), formato que este metodo reproduz para testar esse caminho de
+     * extracao real de CertificadoDigitalService.
+     */
+    public static byte[] gerarP12ComCnpjNoSubjectAlternativeName(String cnpj, char[] senha, Date validoDe, Date validoAte)
+            throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+
+        X500Name subject = new X500Name("CN=EMPRESA TESTE LTDA:" + cnpj + ", OU=RFB e-CNPJ A1, O=ICP-Brasil, C=BR");
+
+        X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+                subject,
+                BigInteger.valueOf(System.identityHashCode(keyPair)),
+                validoDe,
+                validoAte,
+                subject,
+                keyPair.getPublic()
+        );
+
+        ASN1Sequence outroNome = new DERSequence(new ASN1Encodable[]{
+                new ASN1ObjectIdentifier("2.16.76.1.3.3"),
+                new DERTaggedObject(true, 0, new DERUTF8String(cnpj))
+        });
+        GeneralNames nomesAlternativos = new GeneralNames(new GeneralName(GeneralName.otherName, outroNome));
+        certBuilder.addExtension(Extension.subjectAlternativeName, false, nomesAlternativos);
+
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(keyPair.getPrivate());
+        X509Certificate certificate = new JcaX509CertificateConverter()
+                .setProvider("BC")
+                .getCertificate(certBuilder.build(signer));
+
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry("emissor-teste", keyPair.getPrivate(), senha, new X509Certificate[]{certificate});
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        keyStore.store(out, senha);
+        return out.toByteArray();
     }
 
     private static byte[] gerarP12ComSubjectDn(String subjectDn, char[] senha, Date validoDe, Date validoAte) throws Exception {

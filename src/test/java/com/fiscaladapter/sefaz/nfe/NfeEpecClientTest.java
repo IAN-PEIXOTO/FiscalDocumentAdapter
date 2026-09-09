@@ -20,10 +20,12 @@ import java.time.Instant;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class NfeEpecClientTest {
 
     private static final String CHAVE_ACESSO = "35260412345678000199550010000000424000000015";
+    private final NfeEpecXsdValidator xsdValidator = new NfeEpecXsdValidator();
 
     private static final String RESPOSTA_EPEC_REGISTRADO =
             "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\">"
@@ -46,6 +48,9 @@ class NfeEpecClientTest {
         try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
             assertThat(req).contains("envEvento").contains("tpEvento>110140").contains("descEvento>EPEC")
                     .contains("cOrgao>91").contains("Signature");
+            // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC -
+            // foi assim que se descobriu que o <vST> (ja removido) nao existe nesse schema.
+            assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
             return RESPOSTA_EPEC_REGISTRADO;
         })) {
             HttpClient httpClient = new SefazHttpClientFactory()
@@ -106,7 +111,9 @@ class NfeEpecClientTest {
                 NotaFiscalEletronicaTestFixture.impostoIcms40Isenta());
 
         try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
-            assertThat(req).contains("<vICMS>0.00</vICMS>").contains("<vST>0.00</vST>").doesNotContain("<vICMS>0<");
+            assertThat(req).contains("<vICMS>0.00</vICMS>").doesNotContain("<vICMS>0<");
+            // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
+            assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
             return RESPOSTA_EPEC_REGISTRADO;
         })) {
             HttpClient httpClient = new SefazHttpClientFactory()
@@ -129,6 +136,8 @@ class NfeEpecClientTest {
             try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
                 assertThat(req).contains("dhEmi>").doesNotContain("dhEmi>2026-03-15T00:00:00+00:00");
                 assertThat(req).containsPattern("<dhEmi>2026-03-15T00:00:00-03:00");
+                // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
+                assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
                 return RESPOSTA_EPEC_REGISTRADO;
             })) {
                 HttpClient httpClient = new SefazHttpClientFactory()
@@ -140,6 +149,13 @@ class NfeEpecClientTest {
         } finally {
             java.util.TimeZone.setDefault(fusoOriginal);
         }
+    }
+
+    /** O corpo SOAP completo (soap:Envelope) nao e o que o XSD do EPEC valida - so o fragmento envEvento. */
+    private String extrairEnvEvento(String soapRequest) {
+        int inicio = soapRequest.indexOf("<envEvento");
+        int fim = soapRequest.indexOf("</envEvento>") + "</envEvento>".length();
+        return soapRequest.substring(inicio, fim);
     }
 
     private CertificadoCarregado certificadoDeTeste() throws Exception {
