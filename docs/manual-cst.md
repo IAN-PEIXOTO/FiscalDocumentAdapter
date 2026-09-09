@@ -97,6 +97,20 @@ Segue o mesmo mecanismo manual/opt-in de `SefazPrEmissaoNfeRealTest` (`@Tag
 ("homologacao-real")`, excluído do `mvn verify` por padrão, exige certificado real via
 variável de ambiente) — ver o javadoc da classe para instruções de execução.
 
+> **Resultado da execução real mais recente (2026-09-09) — débito técnico aberto,
+> declarado explicitamente**: as 50 notas comunicaram-se de fato com a SEFAZ (nenhuma
+> exceção de transporte/parsing — o que o teste garante), mas **nenhuma foi autorizada**:
+> (1) o endpoint normal de autorização da SEFAZ-PR devolveu HTTP 200 com corpo vazio para
+> todas as tentativas (`Resposta da SEFAZ sem soap:Body`) — causa raiz não identificada;
+> (2) a contingência SVC-RS devolveu HTTP 403 "Access is denied" (estilo IIS) — parece
+> bloqueio de infraestrutura/WAF, não um erro deste adapter; (3) o EPEC (último recurso)
+> foi rejeitado pela SEFAZ com `cStat 493 "Evento nao atende o Schema XML especifico"` —
+> **mesmo após validar o XML localmente contra o XSD oficial sem encontrar nenhum erro**
+> (`NfeEpecXsdValidator`), o que sugere uma divergência entre o schema publicamente
+> disponível (usado aqui) e o que a SEFAZ de fato aplica, ou uma regra de negócio adicional
+> não expressa no XSD. Os três pontos permanecem **não resolvidos** nesta sessão — ver o
+> relatório impresso pelo próprio teste para o detalhe de cada uma das 50 tentativas.
+
 ## 7. Referências legais
 
 - Convênio S/N, de 15/12/1970, Anexo — tabela de CST do ICMS.

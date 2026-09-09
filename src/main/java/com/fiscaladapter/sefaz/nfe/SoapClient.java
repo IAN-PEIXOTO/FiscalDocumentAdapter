@@ -10,11 +10,16 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 /**
- * Envelope SOAP 1.2 compartilhado por todos os servicos da NFe 4.00: o
- * corpo sempre envia &lt;nfeDadosMsg&gt; e recebe &lt;nfeResultMsg&gt;,
- * mudando apenas o namespace (especifico de cada WSDL) e o XML interno.
- * Esse padrao e estavel e documentado de forma consistente em todas as
- * implementacoes de referencia (ACBr, nfephp, etc.) para o layout 4.00.
+ * Envelope SOAP 1.2 compartilhado por todos os servicos da NFe 4.00: o corpo
+ * sempre envia &lt;nfeDadosMsg&gt;. A resposta, porem, NAO usa sempre o mesmo
+ * nome de elemento de retorno (FIS-110, descoberto ao testar EPEC contra a
+ * SEFAZ-PR de homologacao de verdade): Autorizacao/Consulta/StatusServico
+ * respondem em &lt;nfeResultMsg&gt;, mas RecepcaoEvento (usado por EPEC,
+ * CC-e, cancelamento e manifestacao do destinatario) responde num elemento
+ * com nome proprio da operacao (ex.: &lt;nfeRecepcaoEventoNFResult&gt;) - a
+ * suposicao anterior de um nome fixo fazia extrairConteudoResultMsg falhar
+ * sempre para essas operacoes. A extracao agora le o (unico) elemento filho
+ * de soap:Body, seja qual for o nome dele.
  */
 final class SoapClient {
 
@@ -66,28 +71,42 @@ final class SoapClient {
     }
 
     private static String extrairConteudoResultMsg(String respostaSoap) {
-        // FIS-110: precisa checar inicioTag < 0 ANTES de chamar tagComPrefixo(respostaSoap,
-        // inicioTag) - com inicioTag=-1 (nfeResultMsg ausente, ex.: a SEFAZ devolveu um SOAP Fault
-        // em vez da resposta normal), tagComPrefixo fazia xml.substring(0, -1) e lancava
-        // StringIndexOutOfBoundsException em vez do SefazComunicacaoException informativo abaixo.
-        int inicioTag = respostaSoap.indexOf("nfeResultMsg");
+        // FIS-111: precisa checar ausencia ANTES de indexar a tag de fechamento - com a tag
+        // ausente (ex.: a SEFAZ devolveu um SOAP Fault em vez da resposta normal), indexar direto
+        // lancava StringIndexOutOfBoundsException em vez do SefazComunicacaoException informativo.
+        int indiceFimAberturaBody = respostaSoap.indexOf("Body>");
+        if (indiceFimAberturaBody < 0) {
+            throw new SefazComunicacaoException("Resposta da SEFAZ sem soap:Body: " + respostaSoap);
+        }
+        int inicioTag = respostaSoap.indexOf('<', indiceFimAberturaBody + "Body>".length());
         if (inicioTag < 0) {
-            throw new SefazComunicacaoException("Resposta da SEFAZ nao contem nfeResultMsg: " + respostaSoap);
+            throw new SefazComunicacaoException("Corpo da resposta da SEFAZ esta vazio: " + respostaSoap);
         }
-        int fimTagFechamento = respostaSoap.indexOf("</" + tagComPrefixo(respostaSoap, inicioTag));
-        if (fimTagFechamento < 0) {
-            throw new SefazComunicacaoException("Resposta da SEFAZ nao contem nfeResultMsg: " + respostaSoap);
+
+        // FIS-110: o nome do elemento de retorno dentro de soap:Body varia por operacao (ver
+        // javadoc da classe) - em vez de assumir "nfeResultMsg", le o nome de fato do (unico)
+        // elemento filho do Body. Um SOAP Fault tambem cai aqui (nome de elemento "Fault", com ou
+        // sem prefixo) - tratado a parte, com uma mensagem mais especifica.
+        String tagCompleta = nomeCompletoDaTag(respostaSoap, inicioTag);
+        if (tagCompleta.equals("Fault") || tagCompleta.endsWith(":Fault")) {
+            throw new SefazComunicacaoException("Resposta da SEFAZ e um SOAP Fault: " + respostaSoap);
         }
+
         int inicioConteudo = respostaSoap.indexOf('>', inicioTag) + 1;
-        if (inicioConteudo <= 0 || fimTagFechamento <= inicioConteudo) {
-            throw new SefazComunicacaoException("Nao foi possivel extrair o conteudo de nfeResultMsg: " + respostaSoap);
+        int fimTagFechamento = respostaSoap.indexOf("</" + tagCompleta + ">", inicioConteudo);
+        if (inicioConteudo <= 0 || fimTagFechamento < 0) {
+            throw new SefazComunicacaoException(
+                    "Nao foi possivel extrair o conteudo de <" + tagCompleta + "> da resposta da SEFAZ: " + respostaSoap);
         }
         return respostaSoap.substring(inicioConteudo, fimTagFechamento).trim();
     }
 
-    /** Retorna "nfeResultMsg" com o prefixo de namespace, se houver (ex.: "ns2:nfeResultMsg"), para casar a tag de fechamento. */
-    private static String tagComPrefixo(String xml, int posicaoNomeTag) {
-        int inicioAbertura = xml.lastIndexOf('<', posicaoNomeTag);
-        return xml.substring(inicioAbertura + 1, posicaoNomeTag) + "nfeResultMsg";
+    /** Nome da tag de abertura em "posicaoAbertura", com prefixo de namespace se houver (ex.: "ns2:nfeResultMsg"). */
+    private static String nomeCompletoDaTag(String xml, int posicaoAbertura) {
+        int fim = posicaoAbertura + 1;
+        while (fim < xml.length() && xml.charAt(fim) != ' ' && xml.charAt(fim) != '>' && xml.charAt(fim) != '/') {
+            fim++;
+        }
+        return xml.substring(posicaoAbertura + 1, fim);
     }
 }

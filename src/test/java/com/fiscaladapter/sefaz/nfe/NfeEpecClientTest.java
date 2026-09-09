@@ -48,7 +48,7 @@ class NfeEpecClientTest {
         try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
             assertThat(req).contains("envEvento").contains("tpEvento>110140").contains("descEvento>EPEC")
                     .contains("cOrgao>91").contains("Signature");
-            // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC -
+            // FIS-111: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC -
             // foi assim que se descobriu que o <vST> (ja removido) nao existe nesse schema.
             assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
             return RESPOSTA_EPEC_REGISTRADO;
@@ -112,7 +112,7 @@ class NfeEpecClientTest {
 
         try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
             assertThat(req).contains("<vICMS>0.00</vICMS>").doesNotContain("<vICMS>0<");
-            // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
+            // FIS-111: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
             assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
             return RESPOSTA_EPEC_REGISTRADO;
         })) {
@@ -136,7 +136,7 @@ class NfeEpecClientTest {
             try (ServidorSoapDeTeste servidor = ServidorSoapDeTeste.iniciar(req -> {
                 assertThat(req).contains("dhEmi>").doesNotContain("dhEmi>2026-03-15T00:00:00+00:00");
                 assertThat(req).containsPattern("<dhEmi>2026-03-15T00:00:00-03:00");
-                // FIS-110: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
+                // FIS-111: prova que o XML de fato transmitido bate com o XSD oficial do evento EPEC.
                 assertThatCode(() -> xsdValidator.validar(extrairEnvEvento(req))).doesNotThrowAnyException();
                 return RESPOSTA_EPEC_REGISTRADO;
             })) {

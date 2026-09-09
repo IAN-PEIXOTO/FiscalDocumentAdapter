@@ -45,7 +45,7 @@ public class NfeEpecXsdValidator {
         List<String> erros = new ArrayList<>();
         try {
             Validator validator = schema.newValidator();
-            // FIS-110: mesmo endurecimento contra XXE do FIS-107/108.
+            // FIS-111: mesmo endurecimento contra XXE do FIS-107/108.
             validator.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
             validator.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             validator.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);

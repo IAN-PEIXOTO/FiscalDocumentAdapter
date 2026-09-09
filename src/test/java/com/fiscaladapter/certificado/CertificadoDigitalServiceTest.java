@@ -31,7 +31,7 @@ class CertificadoDigitalServiceTest {
     }
 
     /**
-     * FIS-110: certificados e-CNPJ REAIS codificam o CNPJ como "otherName" na extensao Subject
+     * FIS-111: certificados e-CNPJ REAIS codificam o CNPJ como "otherName" na extensao Subject
      * Alternative Name, nao como RDN do Subject DN (formato que so o certificado sintetico de
      * {@link #deveCarregarCertificadoValidoEExtrairCnpj} usa) - confirmado ao testar contra um
      * certificado real, que devolvia CNPJ null antes desta correcao.

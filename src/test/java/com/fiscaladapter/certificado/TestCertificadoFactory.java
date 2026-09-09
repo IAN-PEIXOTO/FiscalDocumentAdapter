@@ -53,7 +53,7 @@ public final class TestCertificadoFactory {
     }
 
     /**
-     * FIS-110: certificados e-CNPJ REAIS (confirmado empiricamente contra um certificado real de
+     * FIS-111: certificados e-CNPJ REAIS (confirmado empiricamente contra um certificado real de
      * uma AC credenciada) nao colocam o OID do CNPJ (2.16.76.1.3.3) como RDN do Subject DN como
      * {@link #gerarP12} simula - colocam como "otherName" dentro da extensao Subject Alternative
      * Name (RFC 5280 GeneralName), formato que este metodo reproduz para testar esse caminho de

@@ -105,7 +105,7 @@ public class NfeEpecClient {
                 + eventoAssinado.replaceFirst("<\\?xml[^>]*\\?>", "")
                 + "</envEvento>";
 
-        // FIS-110: nao chama NfeEpecXsdValidator aqui de proposito, ao contrario dos pipelines
+        // FIS-111: nao chama NfeEpecXsdValidator aqui de proposito, ao contrario dos pipelines
         // principais de documento - o schema do EPEC nao tem nenhum xs:any/skip (diferente do
         // envelope de evento do MDF-e, ver FIS-98), entao validar aqui tambem validaria o CONTEUDO
         // dos campos (IE/UF) contra padroes estritos (soh digitos) - e os testes de escaping deste

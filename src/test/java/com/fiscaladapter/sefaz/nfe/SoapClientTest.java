@@ -13,10 +13,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * FIS-110: uma resposta sem nfeResultMsg (ex.: um SOAP Fault, que alguns webservices de SEFAZ
+ * FIS-111: uma resposta sem nfeResultMsg (ex.: um SOAP Fault, que alguns webservices de SEFAZ
  * devolvem em vez do envelope nfeResultMsg normal em caso de erro do lado deles) lancava
  * StringIndexOutOfBoundsException em vez de um SefazComunicacaoException informativo - descoberto
  * ao testar contra a SEFAZ-PR de homologacao de verdade.
+ *
+ * FIS-110: o nome do elemento de retorno dentro de soap:Body nao e sempre "nfeResultMsg" -
+ * RecepcaoEvento (EPEC/CC-e/cancelamento/manifestacao) responde num elemento com nome proprio da
+ * operacao (ex.: nfeRecepcaoEventoNFResult), tambem descoberto testando EPEC contra a SEFAZ-PR de
+ * homologacao de verdade.
  */
 class SoapClientTest {
 
@@ -30,7 +35,7 @@ class SoapClientTest {
     }
 
     @Test
-    void deveLancarErroClaroQuandoRespostaNaoContemNfeResultMsg() throws Exception {
+    void deveLancarErroClaroQuandoRespostaEUmSoapFault() throws Exception {
         String soapFault = "<?xml version=\"1.0\"?>"
                 + "<soap12:Envelope xmlns:soap12=\"http://www.w3.org/2003/05/soap-envelope\">"
                 + "<soap12:Body><soap12:Fault><soap12:Code><soap12:Value>soap12:Receiver</soap12:Value></soap12:Code>"
@@ -50,7 +55,37 @@ class SoapClientTest {
         assertThatThrownBy(() -> SoapClient.enviar(HttpClient.newHttpClient(), url,
                 "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4", "41", "4.00", "<enviNFe/>"))
                 .isInstanceOf(SefazComunicacaoException.class)
-                .hasMessageContaining("nao contem nfeResultMsg");
+                .hasMessageContaining("SOAP Fault");
+    }
+
+    /**
+     * FIS-110: RecepcaoEvento (EPEC/CC-e/cancelamento/manifestacao) nao responde em
+     * &lt;nfeResultMsg&gt; como Autorizacao/Consulta/StatusServico - responde num elemento com
+     * nome proprio da operacao. Descoberto contra a SEFAZ-PR de homologacao de verdade, onde o
+     * EPEC respondeu em &lt;nfeRecepcaoEventoNFResult&gt;.
+     */
+    @Test
+    void deveExtrairConteudoQuandoElementoDeRetornoNaoSeChamaNfeResultMsg() throws Exception {
+        String respostaRecepcaoEvento = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                + "<soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\">"
+                + "<soap:Body><nfeRecepcaoEventoNFResult xmlns=\"http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4\">"
+                + "<retEnvEvento versao=\"1.00\"><cStat>128</cStat></retEnvEvento>"
+                + "</nfeRecepcaoEventoNFResult></soap:Body></soap:Envelope>";
+
+        servidor = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        servidor.createContext("/servico", exchange -> {
+            byte[] corpo = respostaRecepcaoEvento.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, corpo.length);
+            exchange.getResponseBody().write(corpo);
+            exchange.close();
+        });
+        servidor.start();
+        String url = "http://localhost:" + servidor.getAddress().getPort() + "/servico";
+
+        String conteudo = SoapClient.enviar(HttpClient.newHttpClient(), url,
+                "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4", "41", "1.00", "<envEvento/>");
+
+        assertThat(conteudo).contains("<retEnvEvento").contains("<cStat>128</cStat>");
     }
 
     @Test
