@@ -21,6 +21,9 @@ decisões de escopo declaradas explicitamente — nunca finge cobertura que não
 | Manifesto Eletrônico de Documentos Fiscais | MDF-e, modelo 58 | [manual-mdfe.md](manual-mdfe.md) |
 | Nota Fiscal de Serviços Eletrônica | NFS-e (padrão ABRASF) | [manual-nfse.md](manual-nfse.md) |
 
+Referência complementar: [manual-cst.md](manual-cst.md) — tabela de CST/CSOSN do ICMS
+(e PIS/COFINS) suportados, no espírito das tabelas de referência da ACBr.
+
 ## 1. Autenticação
 
 A API usa **OAuth2 client credentials** (`AuthorizationServerConfig`), no mesmo padrão
