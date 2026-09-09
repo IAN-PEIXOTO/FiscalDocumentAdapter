@@ -67,10 +67,20 @@ public class NfeAutorizacaoClient {
         String cUF = CodigoUfSefaz.codigo(ufEmitente);
         String idLote = String.valueOf(System.nanoTime() % 1_000_000_000L);
 
+        // FIS-114: assinaturaXmlService.assinar (e o pos-processamento de QR Code da NFC-e)
+        // preservam a declaracao <?xml ...?> no inicio do XML assinado - embutir isso NO MEIO do
+        // envelope <enviNFe> (nao no topo do documento) produz XML mal formado (declaracao de
+        // processamento "xml" so e permitida na posicao 0 do documento inteiro). Todos os outros
+        // clientes que embutem um XML assinado (CteAutorizacaoClient, MdfeAutorizacaoClient,
+        // NfeCancelamentoClient, NfeEpecClient etc.) ja removiam essa declaracao - so este cliente
+        // (usado tanto por NFe quanto por NFC-e, ver NfceEmissaoService) esquecia. Descoberto
+        // testando emissao real contra a SEFAZ-PR de homologacao: o XML malformado fazia o
+        // servidor (JBossWeb antigo) responder HTTP 200 com corpo vazio, em vez de um erro claro.
+        String xmlSemDeclaracao = xmlNfeAssinado.replaceFirst("<\\?xml[^>]*\\?>", "");
         String enviNFe = "<enviNFe versao=\"4.00\" xmlns=\"http://www.portalfiscal.inf.br/nfe\">"
                 + "<idLote>" + idLote + "</idLote>"
                 + "<indSinc>1</indSinc>"
-                + xmlNfeAssinado
+                + xmlSemDeclaracao
                 + "</enviNFe>";
 
         String respostaXml = SoapClient.enviar(httpClient, url, NAMESPACE, cUF, "4.00", enviNFe);

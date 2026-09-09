@@ -8,6 +8,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Envelope SOAP 1.2 compartilhado por todos os servicos da NFe 4.00: o corpo
@@ -70,15 +72,22 @@ final class SoapClient {
                 + "</soap12:Envelope>";
     }
 
+    // FIS-115: casa so a tag de ABERTURA de Body (com prefixo de namespace opcional e atributos
+    // opcionais, ex.: <env:Body xmlns:env="...">) - indexOf("Body>") simples (usado antes) dava
+    // falso positivo na tag de FECHAMENTO (</env:Body>, que tambem contem a substring "Body>")
+    // sempre que a abertura tinha atributos (ex.: xmlns inline no Body, comum em respostas SOAP
+    // 1.2 reais), fazendo a extracao pular para depois do Body inteiro e devolver uma tag vazia.
+    private static final Pattern ABERTURA_BODY = Pattern.compile("<(?:[\\w.-]+:)?Body(?:\\s[^>]*)?>");
+
     private static String extrairConteudoResultMsg(String respostaSoap) {
         // FIS-111: precisa checar ausencia ANTES de indexar a tag de fechamento - com a tag
         // ausente (ex.: a SEFAZ devolveu um SOAP Fault em vez da resposta normal), indexar direto
         // lancava StringIndexOutOfBoundsException em vez do SefazComunicacaoException informativo.
-        int indiceFimAberturaBody = respostaSoap.indexOf("Body>");
-        if (indiceFimAberturaBody < 0) {
+        Matcher matcherAberturaBody = ABERTURA_BODY.matcher(respostaSoap);
+        if (!matcherAberturaBody.find()) {
             throw new SefazComunicacaoException("Resposta da SEFAZ sem soap:Body: " + respostaSoap);
         }
-        int inicioTag = respostaSoap.indexOf('<', indiceFimAberturaBody + "Body>".length());
+        int inicioTag = respostaSoap.indexOf('<', matcherAberturaBody.end());
         if (inicioTag < 0) {
             throw new SefazComunicacaoException("Corpo da resposta da SEFAZ esta vazio: " + respostaSoap);
         }

@@ -88,6 +88,38 @@ class SoapClientTest {
         assertThat(conteudo).contains("<retEnvEvento").contains("<cStat>128</cStat>");
     }
 
+    /**
+     * FIS-115: indexOf("Body>") simples (usado antes) dava falso positivo na tag de FECHAMENTO
+     * (</env:Body>, que tambem contem a substring "Body>") sempre que a abertura tinha atributos -
+     * descoberto contra a SEFAZ-PR de homologacao de verdade, cuja resposta real de autorizacao
+     * declara o namespace inline no proprio Body (&lt;env:Body xmlns:env="..."&gt;) em vez de so
+     * no Envelope.
+     */
+    @Test
+    void deveExtrairConteudoQuandoBodyTemAtributos() throws Exception {
+        String respostaComBodyComAtributos = "<?xml version=\"1.0\"?>"
+                + "<env:Envelope xmlns:env=\"http://www.w3.org/2003/05/soap-envelope\">"
+                + "<env:Body xmlns:env=\"http://www.w3.org/2003/05/soap-envelope\">"
+                + "<nfeResultMsg xmlns=\"http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4\">"
+                + "<retEnviNFe><cStat>434</cStat></retEnviNFe>"
+                + "</nfeResultMsg></env:Body></env:Envelope>";
+
+        servidor = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        servidor.createContext("/servico", exchange -> {
+            byte[] corpo = respostaComBodyComAtributos.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, corpo.length);
+            exchange.getResponseBody().write(corpo);
+            exchange.close();
+        });
+        servidor.start();
+        String url = "http://localhost:" + servidor.getAddress().getPort() + "/servico";
+
+        String conteudo = SoapClient.enviar(HttpClient.newHttpClient(), url,
+                "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4", "41", "4.00", "<enviNFe/>");
+
+        assertThat(conteudo).contains("<retEnviNFe>").contains("<cStat>434</cStat>");
+    }
+
     @Test
     void deveExtrairConteudoQuandoRespostaContemNfeResultMsgComPrefixoDeNamespace() throws Exception {
         String respostaComPrefixo = "<?xml version=\"1.0\"?>"

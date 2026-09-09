@@ -95,7 +95,11 @@ public class NfeInutilizacaoClient {
 
         String inutNFeAssinado = assinaturaXmlService.assinar(inutNFeSemAssinatura, id, certificado);
 
-        String respostaXml = SoapClient.enviar(httpClient, url, NAMESPACE, cUF, "4.00", inutNFeAssinado);
+        // FIS-114: assinaturaXmlService.assinar preserva a declaracao <?xml ...?> - embutir isso
+        // dentro de <nfeDadosMsg> (nao no topo do documento) produz XML mal formado. Ver
+        // NfeAutorizacaoClient para o racional completo e como isso foi descoberto.
+        String xmlSemDeclaracao = inutNFeAssinado.replaceFirst("<\\?xml[^>]*\\?>", "");
+        String respostaXml = SoapClient.enviar(httpClient, url, NAMESPACE, cUF, "4.00", xmlSemDeclaracao);
 
         return interpretar(respostaXml);
     }
