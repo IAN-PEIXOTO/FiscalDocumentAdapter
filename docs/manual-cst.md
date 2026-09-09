@@ -121,7 +121,7 @@ variável de ambiente) — ver o javadoc da classe para instruções de execuç�
 > na primeira tentativa (sem precisar de contingência nem EPEC), uma resposta de negócio
 > legítima e nova: `cStat 434 "NFe sem indicativo do intermediador"` — o campo `indIntermed`
 > (indicador de intermediador/marketplace), obrigatório por uma Nota Técnica mais recente,
-> ainda não é gerado por este adapter (débito técnico novo, ver FIS-116).
+> ainda não é gerado por este adapter (débito técnico novo, ver FIS-115).
 >
 > Ver o relatório impresso pelo próprio teste de 50 notas para o detalhe de cada tentativa.
 
